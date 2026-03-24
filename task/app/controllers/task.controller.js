@@ -1,5 +1,6 @@
 const db = require("../models");
 const Task = db.tasks;
+const User = db.users;
 const Op = db.Sequelize.Op;
 const path = require('path');
 const fs = require('fs');
@@ -363,9 +364,160 @@ exports.getStats = async (req, res) => {
     const verified = await Task.count({ where: { status: "verified" } });
     const cancelled = await Task.count({ where: { status: "cancelled" } });
 
+    const active_tasks = pending + in_progress;
+    const finished = done + verified;
+    const completion_rate_pct =
+      total > 0 ? Math.round((finished / total) * 1000) / 10 : 0;
+    const verified_among_finished_pct =
+      finished > 0 ? Math.round((verified / finished) * 1000) / 10 : 0;
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfToday = new Date(startOfToday);
+    endOfToday.setDate(endOfToday.getDate() + 1);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    const tasks_created_today = await Task.count({
+      where: {
+        createdAt: { [Op.gte]: startOfToday, [Op.lt]: endOfToday },
+      },
+    });
+
+    const tasks_completed_today = await Task.count({
+      where: {
+        status: { [Op.in]: ["done", "verified"] },
+        updatedAt: { [Op.gte]: startOfToday, [Op.lt]: endOfToday },
+      },
+    });
+
+    const dueSoonEnd = new Date(now);
+    dueSoonEnd.setDate(dueSoonEnd.getDate() + 4);
+    dueSoonEnd.setHours(23, 59, 59, 999);
+    const tasks_due_soon = await Task.count({
+      where: {
+        due_date: { [Op.between]: [now, dueSoonEnd] },
+        status: { [Op.in]: ["pending", "in_progress"] },
+      },
+    });
+
+    const completedThisMonth = await Task.count({
+      where: {
+        status: { [Op.in]: ["done", "verified"] },
+        updatedAt: { [Op.gte]: startOfMonth },
+      },
+    });
+
+    const completedLastMonth = await Task.count({
+      where: {
+        status: { [Op.in]: ["done", "verified"] },
+        updatedAt: {
+          [Op.gte]: startOfLastMonth,
+          [Op.lt]: startOfMonth,
+        },
+      },
+    });
+
+    let month_over_month_pct = 0;
+    if (completedLastMonth > 0) {
+      month_over_month_pct =
+        Math.round(
+          ((completedThisMonth - completedLastMonth) / completedLastMonth) * 1000
+        ) / 10;
+    } else if (completedThisMonth > 0) {
+      month_over_month_pct = 100;
+    }
+
+    const withCompletion = await Task.findAll({
+      where: { completed_at: { [Op.ne]: null } },
+      attributes: ["createdAt", "completed_at"],
+      raw: true,
+    });
+    let avg_completion_days = null;
+    if (withCompletion.length) {
+      let sum = 0;
+      for (const t of withCompletion) {
+        sum +=
+          (new Date(t.completed_at).getTime() -
+            new Date(t.createdAt).getTime()) /
+          86400000;
+      }
+      avg_completion_days = Math.round((sum / withCompletion.length) * 10) / 10;
+    }
+
+    const users_total = await User.count();
+    const users_active = await User.count({ where: { is_active: true } });
+    const new_users_this_month = await User.count({
+      where: { createdAt: { [Op.gte]: startOfMonth } },
+    });
+
+    const completedThisMonthTasks = await Task.findAll({
+      where: {
+        status: { [Op.in]: ["done", "verified"] },
+        updatedAt: { [Op.gte]: startOfMonth },
+        assigned_to: { [Op.ne]: null },
+      },
+      attributes: ["assigned_to"],
+      raw: true,
+    });
+    const byAssignee = {};
+    for (const row of completedThisMonthTasks) {
+      const id = row.assigned_to;
+      byAssignee[id] = (byAssignee[id] || 0) + 1;
+    }
+    let top_worker = null;
+    let topCount = 0;
+    let topUid = null;
+    for (const [uid, cnt] of Object.entries(byAssignee)) {
+      if (cnt > topCount) {
+        topCount = cnt;
+        topUid = Number(uid);
+      }
+    }
+    if (topUid) {
+      const u = await User.findByPk(topUid, {
+        attributes: ["id", "full_name"],
+      });
+      if (u) {
+        const pct =
+          completedThisMonth > 0
+            ? Math.round((topCount / completedThisMonth) * 1000) / 10
+            : 0;
+        top_worker = {
+          id: u.id,
+          full_name: u.full_name,
+          completed_tasks: topCount,
+          share_of_month_pct: pct,
+        };
+      }
+    }
+
     return res.send({
       success: true,
-      data: { total, pending, in_progress, done, verified, cancelled },
+      data: {
+        total,
+        pending,
+        in_progress,
+        done,
+        verified,
+        cancelled,
+        dashboard: {
+          users_total,
+          users_active,
+          new_users_this_month,
+          active_tasks,
+          completion_rate_pct,
+          avg_completion_days,
+          verified_among_finished_pct,
+          month_over_month_pct,
+          tasks_created_today,
+          tasks_completed_today,
+          tasks_due_soon,
+          completed_this_month: completedThisMonth,
+          top_worker,
+        },
+      },
     });
   } catch (err) {
     return res.status(500).send({ success: false, message: err.message });
