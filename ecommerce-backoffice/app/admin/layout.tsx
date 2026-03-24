@@ -1,6 +1,11 @@
 import React from "react";
+import type { Metadata } from "next";
 import { Sidebar } from "@/components/admin/sidebar";
 import { Navbar } from "@/components/admin/navbar";
+
+export const metadata: Metadata = {
+  title: "Хянах самбар",
+};
 
 export default function AdminLayout({
   children,

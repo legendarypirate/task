@@ -1,16 +1,8 @@
-import React from 'react';
-import Head from 'next/head';
+import React from "react";
 
 const PrivacyPolicyPage: React.FC = () => {
   return (
-    <>
-      <Head>
-        <title>Нууцлалын бодлого - Өгөөж Чихэр Боов ХХК</title>
-        <meta name="description" content="Өгөөж Чихэр Боов ХХК-ний ажилтнуудын гар утасны апп-ын нууцлалын бодлого" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-      </Head>
-      
-      <div className="min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           {/* Header Section */}
           <div className="text-center mb-10">
@@ -239,8 +231,7 @@ const PrivacyPolicyPage: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
-    </>
+    </div>
   );
 };
 

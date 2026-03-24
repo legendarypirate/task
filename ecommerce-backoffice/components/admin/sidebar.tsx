@@ -21,7 +21,7 @@ export function Sidebar() {
 
   return (
     <aside className="w-64 bg-background border-r p-4 flex flex-col">
-      <h1 className="text-lg font-bold mb-6">Admin Panel</h1>
+      <h1 className="text-lg font-bold mb-6">Админ самбар</h1>
       <nav className="flex flex-col gap-2">
         {links.map(({ href, label, icon: Icon }) => (
           <Link
