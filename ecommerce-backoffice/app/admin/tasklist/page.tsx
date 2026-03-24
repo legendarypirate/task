@@ -20,7 +20,15 @@ import { useDroppable } from "@dnd-kit/core";
 import { TaskCard } from "@/components/task/TaskCard";
 import { X, List, Grid, Plus, Edit, User, Save, Trash2, Eye } from "lucide-react";
 
-const columns = ["pending", "in_progress", "done", "verified", "cancelled"];
+const columns = ["pending", "in_progress", "done", "verified", "cancelled"] as const;
+
+const STATUS_LABELS: Record<(typeof columns)[number], string> = {
+  pending: "Шинэ",
+  in_progress: "Гүйцэтгэж байгаа",
+  done: "Дууссан",
+  verified: "Баталгаажсан",
+  cancelled: "Цуцалсан",
+};
 
 interface Task {
   id: number;
@@ -429,7 +437,17 @@ const dropAnimationConfig = {
 };
 
 // Droppable column component
-function Column({ id, children }: { id: string; children: React.ReactNode }) {
+function Column({
+  id,
+  title,
+  count,
+  children,
+}: {
+  id: string;
+  title: string;
+  count: number;
+  children: React.ReactNode;
+}) {
   const { isOver, setNodeRef } = useDroppable({
     id,
     data: {
@@ -446,8 +464,9 @@ function Column({ id, children }: { id: string; children: React.ReactNode }) {
         ${isOver ? "ring-2 ring-blue-500 ring-opacity-50 bg-blue-50 dark:bg-blue-900/20" : ""}
       `}
     >
-      <h2 className="font-semibold mb-3 capitalize text-gray-700 dark:text-gray-300">
-        {id.replace("_", " ")} ({(children as React.ReactNode[]).length})
+      <h2 className="mb-3 text-sm font-semibold leading-snug text-gray-700 dark:text-gray-300">
+        {title}{" "}
+        <span className="tabular-nums text-gray-600 dark:text-gray-400">({count})</span>
       </h2>
       <div className="flex flex-col gap-3 min-h-[200px] transition-all duration-300">
         {children}
@@ -906,7 +925,12 @@ function KanbanBoard({
       >
         <div className="flex gap-6 overflow-x-auto pb-4">
           {columns.map((col) => (
-            <Column key={col} id={col}>
+            <Column
+              key={col}
+              id={col}
+              title={STATUS_LABELS[col]}
+              count={(columnTasks[col] || []).length}
+            >
               <SortableContext
                 items={(columnTasks[col] || []).map(task => task.id)}
                 strategy={verticalListSortingStrategy}
