@@ -55,8 +55,8 @@ interface TaskFormProps {
 }
 
 export default function TaskForm({ task, onSuccess, onCancel, loading = false, onSubmit }: TaskFormProps) {
-  const [workers, setWorkers] = useState<User[]>([]);
-  const [supervisors, setSupervisors] = useState<User[]>([]);
+  const [assignableSupervisors, setAssignableSupervisors] = useState<User[]>([]);
+  const [reviewManagers, setReviewManagers] = useState<User[]>([]);
   const [formData, setFormData] = useState<TaskFormData>({
     title: "",
     description: "",
@@ -69,6 +69,7 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
     supervisor_id: "",
     supervisor_ids: [],
   });
+  const [assignedSupervisorIds, setAssignedSupervisorIds] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -82,8 +83,10 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
         const result = await response.json();
         const users: User[] = Array.isArray(result?.data) ? result.data : [];
 
-        setWorkers(users.filter((u) => u.role === "worker"));
-        setSupervisors(users.filter((u) => u.role === "supervisor"));
+        setAssignableSupervisors(users.filter((u) => u.role === "supervisor"));
+        setReviewManagers(
+          users.filter((u) => u.role === "general_manager" || u.role === "director")
+        );
       } catch (error) {
         console.error("Error fetching users:", error);
       }
@@ -106,6 +109,7 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
         supervisor_id: task.supervisor_id?.toString() || "",
         supervisor_ids: task.supervisor_id ? [task.supervisor_id.toString()] : [],
       });
+      setAssignedSupervisorIds(task.assigned_to ? [task.assigned_to.toString()] : []);
     }
   }, [task]);
 
@@ -123,7 +127,8 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
         ...formData,
         frequency_value: formData.frequency_type === "none" ? 1 : formData.frequency_value,
         due_date: formData.frequency_type === "none" ? formData.due_date : "",
-        assigned_to: formData.assigned_to || "",
+        // Backend currently supports single assigned_to; keep first selected supervisor.
+        assigned_to: assignedSupervisorIds[0] || formData.assigned_to || "",
         // Backend currently supports single supervisor_id; keep first selected.
         supervisor_id: formData.supervisor_ids[0] || formData.supervisor_id || "",
         supervisor_ids: formData.supervisor_ids,
@@ -151,7 +156,10 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
           ...formData,
           frequency_value: formData.frequency_type === "none" ? null : formData.frequency_value,
           due_date: formData.frequency_type === "none" ? formData.due_date : null,
-          assigned_to: formData.assigned_to ? parseInt(formData.assigned_to) : null,
+          // Backend currently supports single assigned_to; keep first selected supervisor.
+          assigned_to: (assignedSupervisorIds[0] || formData.assigned_to)
+            ? parseInt(assignedSupervisorIds[0] || formData.assigned_to)
+            : null,
           // Backend currently supports single supervisor_id; keep first selected.
           supervisor_id: (formData.supervisor_ids[0] || formData.supervisor_id)
             ? parseInt(formData.supervisor_ids[0] || formData.supervisor_id)
@@ -261,22 +269,41 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
         </div>
 
         <div>
-          <Label htmlFor="assigned_to">Хэрэгжүүлэгч</Label>
-          <Select
-            value={formData.assigned_to}
-            onValueChange={(value) => setFormData({ ...formData, assigned_to: value })}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Ажилтан сонгох" />
-            </SelectTrigger>
-            <SelectContent>
-              {workers.map((worker) => (
-                <SelectItem key={worker.id} value={worker.id.toString()}>
-                  {(worker.full_name || worker.phone || `ID: ${worker.id}`) + ` (ID: ${worker.id})`}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label>Хэрэгжүүлэгч (Supervisor)</Label>
+          <div className="mt-2 max-h-48 overflow-auto rounded-md border p-3 space-y-2">
+            {assignableSupervisors.length === 0 && (
+              <p className="text-sm text-gray-500">Supervisor хэрэглэгч олдсонгүй</p>
+            )}
+            {assignableSupervisors.map((supervisor) => {
+              const id = supervisor.id.toString();
+              const checked = assignedSupervisorIds.includes(id);
+              return (
+                <label key={id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) => {
+                      const nextIds = e.target.checked
+                        ? [...assignedSupervisorIds, id]
+                        : assignedSupervisorIds.filter((x) => x !== id);
+                      setAssignedSupervisorIds(nextIds);
+                      setFormData({
+                        ...formData,
+                        assigned_to: nextIds[0] || "",
+                      });
+                    }}
+                  />
+                  <span>
+                    {(supervisor.full_name || supervisor.phone || `ID: ${supervisor.id}`) +
+                      ` (ID: ${supervisor.id})`}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs text-gray-500">
+            Тэмдэглэл: одоогийн backend нэг л assigned_to хадгалдаг (эхний сонголт).
+          </p>
         </div>
       </div>
 
@@ -333,13 +360,15 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
       )}
 
       <div>
-        <Label>Хянах хүмүүс (Supervisor)</Label>
+        <Label>Хянах хүмүүс (General manager / Director)</Label>
         <div className="mt-2 max-h-48 overflow-auto rounded-md border p-3 space-y-2">
-          {supervisors.length === 0 && (
-            <p className="text-sm text-gray-500">Supervisor хэрэглэгч олдсонгүй</p>
+          {reviewManagers.length === 0 && (
+            <p className="text-sm text-gray-500">
+              General manager эсвэл director хэрэглэгч олдсонгүй
+            </p>
           )}
-          {supervisors.map((supervisor) => {
-            const id = supervisor.id.toString();
+          {reviewManagers.map((manager) => {
+            const id = manager.id.toString();
             const checked = formData.supervisor_ids.includes(id);
             return (
               <label key={id} className="flex items-center gap-2 text-sm">
@@ -358,7 +387,8 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
                   }}
                 />
                 <span>
-                  {(supervisor.full_name || supervisor.phone || `ID: ${supervisor.id}`) + ` (ID: ${supervisor.id})`}
+                  {(manager.full_name || manager.phone || `ID: ${manager.id}`) +
+                    ` (${manager.role}, ID: ${manager.id})`}
                 </span>
               </label>
             );
