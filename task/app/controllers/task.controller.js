@@ -5,6 +5,18 @@ const Op = db.Sequelize.Op;
 const path = require('path');
 const fs = require('fs');
 const cloudinary = require("../config/cloudinary");
+
+function toNullableInt(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function toNullableDate(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
 // ---------------------- CREATE ----------------------
 exports.create = async (req, res) => {
   try {
@@ -14,18 +26,26 @@ exports.create = async (req, res) => {
       return res.status(400).send({ success: false, message: "Гарчиг оруулна уу" });
     }
 
+    const normalizedFrequencyType = frequency_type || "none";
+    const normalizedAssignedTo = toNullableInt(assigned_to);
+    const normalizedSupervisorId = toNullableInt(supervisor_id);
+    const normalizedDueDate =
+      normalizedFrequencyType === "none" ? toNullableDate(due_date) : null;
+    const normalizedFrequencyValue =
+      normalizedFrequencyType === "none" ? null : toNullableInt(frequency_value);
+
     const task = await Task.create({
       title,
       description,
       created_by: created_by || req.user?.userId || 1, // req.user байхгүй бол default утга
-      assigned_to,
-      supervisor_id,
+      assigned_to: normalizedAssignedTo,
+      supervisor_id: normalizedSupervisorId,
       priority: priority || "normal",
       status: status || "pending",
       image,
-      due_date,
-      frequency_type: frequency_type || "none",
-      frequency_value: frequency_type === "none" ? null : frequency_value
+      due_date: normalizedDueDate,
+      frequency_type: normalizedFrequencyType,
+      frequency_value: normalizedFrequencyValue
     });
 
     return res.send({ success: true, data: task });
@@ -67,8 +87,27 @@ exports.findOne = async (req, res) => {
 exports.update = async (req, res) => {
   try {
     const id = req.params.id;
+    const payload = { ...req.body };
+    if (Object.prototype.hasOwnProperty.call(payload, "assigned_to")) {
+      payload.assigned_to = toNullableInt(payload.assigned_to);
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "supervisor_id")) {
+      payload.supervisor_id = toNullableInt(payload.supervisor_id);
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "due_date")) {
+      payload.due_date = toNullableDate(payload.due_date);
+    }
+    if (Object.prototype.hasOwnProperty.call(payload, "frequency_value")) {
+      payload.frequency_value = toNullableInt(payload.frequency_value);
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(payload, "frequency_type") &&
+      payload.frequency_type === "none"
+    ) {
+      payload.frequency_value = null;
+    }
 
-    const result = await Task.update(req.body, { where: { id } });
+    const result = await Task.update(payload, { where: { id } });
     if (result[0] === 0) {
       return res.status(404).send({ success: false, message: "Таск олдсонгүй" });
     }
