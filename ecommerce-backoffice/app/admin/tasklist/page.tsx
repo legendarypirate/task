@@ -960,10 +960,14 @@ export default function TaskManagementPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [columnTasks, setColumnTasks] = useState<Record<string, Task[]>>({});
   const [supervisors, setSupervisors] = useState<User[]>([]);
+  const [workers, setWorkers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [workerFilter, setWorkerFilter] = useState<string>("all");
+  const [supervisorFilter, setSupervisorFilter] = useState<string>("all");
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -978,10 +982,28 @@ export default function TaskManagementPage() {
     fetchData();
   }, []);
 
+  const getFilteredTasks = (source: Task[]) => {
+    return source.filter((task) => {
+      if (statusFilter !== "all" && task.status !== statusFilter) return false;
+      if (workerFilter !== "all" && String(task.assigned_to ?? "") !== workerFilter) return false;
+      if (supervisorFilter !== "all" && String(task.supervisor_id ?? "") !== supervisorFilter) return false;
+      return true;
+    });
+  };
+
+  useEffect(() => {
+    const filtered = getFilteredTasks(tasks);
+    const grouped: Record<string, Task[]> = {};
+    columns.forEach((c) => {
+      grouped[c] = filtered.filter((t) => t.status === c);
+    });
+    setColumnTasks(grouped);
+  }, [tasks, statusFilter, workerFilter, supervisorFilter]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
-      await Promise.all([fetchSupervisors(), fetchTasks()]);
+      await Promise.all([fetchUsers(), fetchTasks()]);
     } catch (err) {
       console.error("Failed to fetch data", err);
     } finally {
@@ -989,9 +1011,9 @@ export default function TaskManagementPage() {
     }
   };
 
-  const fetchSupervisors = async () => {
+  const fetchUsers = async () => {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user?role=supervisor`);
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user`);
       
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
@@ -1008,8 +1030,7 @@ export default function TaskManagementPage() {
         supervisorData = json.data;
       }
       
-      const filteredSupervisors = supervisorData
-        .filter((user: any) => user.role?.toLowerCase() === 'supervisor')
+      const normalizedUsers = supervisorData
         .map((user: any) => {
           let fullName = user.full_name;
           
@@ -1018,8 +1039,10 @@ export default function TaskManagementPage() {
               fullName = `${user.first_name} ${user.last_name}`;
             } else if (user.name) {
               fullName = user.name;
-            } else {
+            } else if (user.email) {
               fullName = user.email.split('@')[0];
+            } else {
+              fullName = `User ${user.id}`;
             }
           }
           
@@ -1028,11 +1051,19 @@ export default function TaskManagementPage() {
             full_name: fullName
           };
         });
+
+      const filteredSupervisors = normalizedUsers
+        .filter((user: any) => user.role?.toLowerCase() === 'supervisor')
+        ;
+      const filteredWorkers = normalizedUsers
+        .filter((user: any) => user.role?.toLowerCase() === 'worker');
       
       setSupervisors(filteredSupervisors);
+      setWorkers(filteredWorkers);
     } catch (err) {
-      console.error("Failed to fetch supervisors", err);
+      console.error("Failed to fetch users", err);
       setSupervisors([]);
+      setWorkers([]);
     }
   };
 
@@ -1058,7 +1089,6 @@ export default function TaskManagementPage() {
       columns.forEach((c) => {
         grouped[c] = fetchedTasks.filter((t: Task) => t.status === c);
       });
-
       setColumnTasks(grouped);
     } catch (err) {
       console.error("Failed to fetch tasks", err);
@@ -1293,6 +1323,44 @@ export default function TaskManagementPage() {
               </button>
             </div>
           </div>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 dark:text-white"
+            >
+              <option value="all">Бүх төлөв</option>
+              {columns.map((status) => (
+                <option key={status} value={status}>
+                  {STATUS_LABELS[status]}
+                </option>
+              ))}
+            </select>
+            <select
+              value={workerFilter}
+              onChange={(e) => setWorkerFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 dark:text-white"
+            >
+              <option value="all">Бүх хэрэгжүүлэгч</option>
+              {workers.map((worker) => (
+                <option key={worker.id} value={String(worker.id)}>
+                  {worker.full_name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={supervisorFilter}
+              onChange={(e) => setSupervisorFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700 dark:text-white"
+            >
+              <option value="all">Бүх supervisor</option>
+              {supervisors.map((supervisor) => (
+                <option key={supervisor.id} value={String(supervisor.id)}>
+                  {supervisor.full_name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -1308,7 +1376,7 @@ export default function TaskManagementPage() {
       ) : (
         <div className="p-6">
           <TaskListScreen 
-            tasks={tasks}
+            tasks={getFilteredTasks(tasks)}
             supervisors={supervisors}
             onAssignSupervisor={assignSupervisor}
             onEditTask={setEditingTask}
