@@ -986,7 +986,13 @@ export default function TaskManagementPage() {
     return source.filter((task) => {
       if (statusFilter !== "all" && task.status !== statusFilter) return false;
       if (workerFilter !== "all" && String(task.assigned_to ?? "") !== workerFilter) return false;
-      if (supervisorFilter !== "all" && String(task.supervisor_id ?? "") !== supervisorFilter) return false;
+      if (supervisorFilter !== "all") {
+        const sid = Number(supervisorFilter);
+        const matchesSupervisorField = task.supervisor_id === sid;
+        // Some flows assign the supervisor as assignee (assigned_to).
+        const matchesAssignedSupervisor = task.assigned_to === sid;
+        if (!matchesSupervisorField && !matchesAssignedSupervisor) return false;
+      }
       return true;
     });
   };
