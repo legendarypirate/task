@@ -3,7 +3,7 @@ const User = db.users;
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key";
+const JWT_SECRET = process.env.JWT_SECRET || "your-fallback-secret-key";
 
 // ====================
 // REGISTER
@@ -111,7 +111,7 @@ exports.login = async (req, res) => {
         phone: user.phone,
         role: user.role 
       },
-      process.env.JWT_SECRET || 'your-fallback-secret-key',
+      JWT_SECRET,
       { expiresIn: '24h' }
     );
 

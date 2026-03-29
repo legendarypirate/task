@@ -26,6 +26,10 @@ module.exports = (sequelize, Sequelize) => {
       type: Sequelize.BOOLEAN,
       defaultValue: true,
     },
+    fcm_token: {
+      type: Sequelize.TEXT,
+      allowNull: true,
+    },
   });
 
   return User;

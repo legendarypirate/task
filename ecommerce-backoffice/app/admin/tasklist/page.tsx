@@ -43,6 +43,32 @@ interface Task {
   image?: string | null;
   created_at?: string;
   updated_at?: string;
+  /** Sequelize may serialize as camelCase */
+  updatedAt?: string;
+  completed_at?: string;
+}
+
+/** Date used to decide which calendar month a verified task belongs to (verification / last update). */
+function getVerifiedMonthReference(task: Task): Date | null {
+  const raw =
+    task.updated_at ??
+    task.updatedAt ??
+    task.completed_at;
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** True when task is verified and its reference month is strictly before the current local month. */
+function isVerifiedFromPriorMonth(task: Task): boolean {
+  if (task.status !== "verified") return false;
+  const d = getVerifiedMonthReference(task);
+  if (!d) return false;
+  const now = new Date();
+  return (
+    d.getFullYear() < now.getFullYear() ||
+    (d.getFullYear() === now.getFullYear() && d.getMonth() < now.getMonth())
+  );
 }
 
 // User interface for supervisors
@@ -984,6 +1010,7 @@ export default function TaskManagementPage() {
 
   const getFilteredTasks = (source: Task[]) => {
     return source.filter((task) => {
+      if (isVerifiedFromPriorMonth(task)) return false;
       if (statusFilter !== "all" && task.status !== statusFilter) return false;
       if (workerFilter !== "all" && String(task.assigned_to ?? "") !== workerFilter) return false;
       if (supervisorFilter !== "all") {

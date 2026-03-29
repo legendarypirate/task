@@ -44,6 +44,7 @@ app.get("/", (req, res) => {
 
 // Route imports
 require("./app/routes/auth.routes")(app);
+require("./app/routes/push.routes")(app);
 require("./app/routes/task.routes")(app);
 
 // Role-related routes
@@ -69,3 +70,17 @@ const PORT = process.env.PORT || 3227;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}.`);
 });
+
+// Daily at 08:00 server local time: push reminder 1 day before task due_date
+try {
+  const cron = require("node-cron");
+  const { runTaskDeadlineReminders } = require("./app/jobs/taskDeadlineReminder.job");
+  cron.schedule("0 8 * * *", () => {
+    runTaskDeadlineReminders().catch((e) =>
+      console.error("[deadline-reminder] job error:", e)
+    );
+  });
+  console.log("[cron] Task deadline reminders scheduled: 0 8 * * * (server local time)");
+} catch (e) {
+  console.warn("[cron] Could not schedule deadline reminders:", e.message);
+}

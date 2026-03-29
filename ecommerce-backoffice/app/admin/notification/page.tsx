@@ -14,104 +14,34 @@ import {
   CheckCircle, 
   AlertCircle,
   Calendar,
-  User
+  User,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { mn } from "date-fns/locale";
 
-// Статик өгөгдөл
-const initialNotifications = [
-  {
-    id: 1,
-    title: "Шинэ даалгавар үүссэн",
-    message: "Борлуулалтын тайлан бэлтгэх даалгавар танд өгөгдлөө",
-    type: "task",
-    priority: "high",
-    sender: "А.Бат",
-    receiverType: "individual",
-    receiverName: "Ц.Энхжин",
-    sentAt: "2024-01-15T10:30:00",
-    read: true,
-    status: "sent"
-  },
-  {
-    id: 2,
-    title: "Чухал мэдэгдэл",
-    message: "Энэ сарын уулзалт 15-ны өдөр 14:00 цагт болно",
-    type: "announcement",
-    priority: "high",
-    sender: "Удирдлагын газар",
-    receiverType: "all",
-    receiverName: "Бүх ажилчид",
-    sentAt: "2024-01-14T09:15:00",
-    read: true,
-    status: "sent"
-  },
-  {
-    id: 3,
-    title: "Дуусах хугацаа ойртлоо",
-    message: "Төсөв төлөвлөлтийн даалгавар 2 хоног үлдлээ",
-    type: "reminder",
-    priority: "medium",
-    sender: "Систем",
-    receiverType: "group",
-    receiverName: "Санхүүгийн баг",
-    sentAt: "2024-01-14T15:45:00",
-    read: false,
-    status: "sent"
-  },
-  {
-    id: 4,
-    title: "Ажлын байранд анхааруулга",
-    message: "Маргааш цахилгаан тасалдалтай байна, урьдчилан бэлдэх",
-    type: "warning",
-    priority: "high",
-    sender: "Техник технологийн хэлтэс",
-    receiverType: "department",
-    receiverName: "Бүх хэлтэс",
-    sentAt: "2024-01-13T16:20:00",
-    read: true,
-    status: "sent"
-  },
-  {
-    id: 5,
-    title: "Баяр хүргэе",
-    message: "Тайзны ажилтны 5 жилийн ойд баяр хүргэе",
-    type: "congrats",
-    priority: "low",
-    sender: "Хүний нөөцийн хэлтэс",
-    receiverType: "individual",
-    receiverName: "Б.Гэрэлмаа",
-    sentAt: "2024-01-12T11:00:00",
-    read: false,
-    status: "sent"
-  },
-  {
-    id: 6,
-    title: "Сургалтын мэдээлэл",
-    message: "Шинэ програм хангамжийн сургалт эхэлж байна",
-    type: "training",
-    priority: "medium",
-    sender: "Сургалтын хэлтэс",
-    receiverType: "selected",
-    receiverName: "Сонгогдсон 10 ажилтан",
-    sentAt: "2024-01-11T13:30:00",
-    read: true,
-    status: "sent"
-  },
+type UiNotification = {
+  id: number;
+  title: string;
+  message: string;
+  type: string;
+  priority: string;
+  sender: string;
+  receiverType: string;
+  receiverName: string;
+  sentAt: string;
+  read: boolean;
+  status: string;
+};
+
+const SYSTEM_ROLES: { value: string; label: string }[] = [
+  { value: "director", label: "Захирал" },
+  { value: "general_manager", label: "Ерөнхий менежер" },
+  { value: "supervisor", label: "Ахлах / хянагч" },
+  { value: "worker", label: "Ажилтан" },
 ];
 
-// Хэрэглэгчийн статик жагсаалт
-const users = [
-  { id: 1, name: "Ц.Энхжин", role: "Ахлах мэргэжилтэн", department: "Борлуулалт" },
-  { id: 2, name: "Б.Гэрэлмаа", role: "Тайзны ажилтан", department: "Үйлдвэрлэл" },
-  { id: 3, name: "А.Бат", role: "Менежер", department: "Борлуулалт" },
-  { id: 4, name: "Д.Сүхбат", role: "Программист", department: "IT" },
-  { id: 5, name: "Ц.Ариунзаяа", role: "Санхүүчи", department: "Санхүү" },
-  { id: 6, name: "Б.Энхтайван", role: "Ахлах инженер", department: "Техник" },
-  { id: 7, name: "Г.Отгонцэцэг", role: "Маркетингийн мэргэжилтэн", department: "Маркетинг" },
-  { id: 8, name: "Л.Хүслэн", role: "Агуулахын ажилтан", department: "Логистик" },
-];
+const initialNotifications: UiNotification[] = [];
 
 // Мэдэгдлийн төрлүүд
 const notificationTypes = [
@@ -123,15 +53,6 @@ const notificationTypes = [
   { value: "training", label: "Сургалт" },
 ];
 
-// Хүлээн авагчийн төрлүүд
-const receiverTypes = [
-  { value: "all", label: "Бүх ажилчид", icon: <Users className="h-4 w-4" /> },
-  { value: "department", label: "Тодорхой хэлтэс", icon: <Users className="h-4 w-4" /> },
-  { value: "group", label: "Баг", icon: <Users className="h-4 w-4" /> },
-  { value: "individual", label: "Хувь хүн", icon: <User className="h-4 w-4" /> },
-  { value: "selected", label: "Сонгосон хүмүүс", icon: <User className="h-4 w-4" /> },
-];
-
 // Хүрээтэй тэргүүн зэргийн жагсаалт
 const priorities = [
   { value: "low", label: "Бага", color: "bg-gray-100 text-gray-800" },
@@ -140,19 +61,33 @@ const priorities = [
 ];
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState(initialNotifications);
+  const [notifications, setNotifications] = useState<UiNotification[]>(initialNotifications);
   const [showSendForm, setShowSendForm] = useState(false);
   const [loading, setLoading] = useState(false);
-  
-  // Шинэ мэдэгдлийн form state
+  const [fcmReady, setFcmReady] = useState<boolean | null>(null);
+
   const [newNotification, setNewNotification] = useState({
     title: "",
     message: "",
     type: "announcement",
     priority: "medium",
-    receiverType: "all",
-    selectedUsers: [] as number[],
+    /** role value -> selected */
+    roles: {
+      director: true,
+      general_manager: true,
+      supervisor: true,
+      worker: true,
+    } as Record<string, boolean>,
   });
+
+  useEffect(() => {
+    const api = process.env.NEXT_PUBLIC_API_URL;
+    if (!api) return;
+    fetch(`${api}/api/push/status`)
+      .then((r) => r.json())
+      .then((j) => setFcmReady(!!j.fcmConfigured))
+      .catch(() => setFcmReady(false));
+  }, []);
 
   // Унших болгох
   const markAsRead = (id: number) => {
@@ -171,77 +106,101 @@ export default function NotificationsPage() {
     toast.success("Бүх мэдэгдлийг уншсан болголоо");
   };
 
-  // Мэдэгдэл илгээх
+  const defaultRolesState = () =>
+    ({
+      director: true,
+      general_manager: true,
+      supervisor: true,
+      worker: true,
+    }) as Record<string, boolean>;
+
   const handleSendNotification = async () => {
     if (!newNotification.title.trim() || !newNotification.message.trim()) {
       toast.error("Гарчиг болон мессежээ бөглөнө үү");
       return;
     }
 
+    const selectedRoles = SYSTEM_ROLES.filter((r) => newNotification.roles[r.value]).map(
+      (r) => r.value
+    );
+    if (selectedRoles.length === 0) {
+      toast.error("Дор хаяж нэг үүрэг сонгоно уу");
+      return;
+    }
+
+    const api = process.env.NEXT_PUBLIC_API_URL;
+    if (!api) {
+      toast.error("NEXT_PUBLIC_API_URL тохируулаагүй байна");
+      return;
+    }
+
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) {
+      toast.error("Нэвтэрч ороод дахин оролдоно уу");
+      return;
+    }
+
     setLoading(true);
-    
+
     try {
-      // Firebase руу илгээх логик (static төлөвт зориулж загварчлав)
-      const firebaseResponse = {
-        success: true,
-        messageId: `msg_${Date.now()}`,
-        recipients: newNotification.receiverType === "all" ? users.length : newNotification.selectedUsers.length
+      const res = await fetch(`${api}/api/push/broadcast`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: newNotification.title.trim(),
+          body: newNotification.message.trim(),
+          roles: selectedRoles,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        toast.error(data.message || `Алдаа: ${res.status}`);
+        return;
+      }
+
+      const receiverName = SYSTEM_ROLES.filter((r) => selectedRoles.includes(r.value))
+        .map((r) => r.label)
+        .join(", ");
+
+      const newNotif: UiNotification = {
+        id: Date.now(),
+        title: newNotification.title.trim(),
+        message: newNotification.message.trim(),
+        type: newNotification.type,
+        priority: newNotification.priority,
+        sender: "Админ (push)",
+        receiverType: "role_broadcast",
+        receiverName,
+        sentAt: new Date().toISOString(),
+        read: false,
+        status: "sent",
       };
 
-      if (firebaseResponse.success) {
-        // Шинэ мэдэгдэл нэмэх
-        const newNotif = {
-          id: notifications.length + 1,
-          title: newNotification.title,
-          message: newNotification.message,
-          type: newNotification.type,
-          priority: newNotification.priority,
-          sender: "Та (Систем администратор)",
-          receiverType: newNotification.receiverType,
-          receiverName: getReceiverName(newNotification.receiverType, newNotification.selectedUsers),
-          sentAt: new Date().toISOString(),
-          read: false,
-          status: "sent"
-        };
+      setNotifications((prev) => [newNotif, ...prev]);
 
-        setNotifications(prev => [newNotif, ...prev]);
-        
-        // Форм цэвэрлэх
-        setNewNotification({
-          title: "",
-          message: "",
-          type: "announcement",
-          priority: "medium",
-          receiverType: "all",
-          selectedUsers: [],
-        });
-        
-        setShowSendForm(false);
-        
-        toast.success(
-          `Мэдэгдэл амжилттай илгээгдлээ. ${firebaseResponse.recipients} хүлээн авагчид хүргэгдлээ.`
-        );
-      }
+      setNewNotification({
+        title: "",
+        message: "",
+        type: "announcement",
+        priority: "medium",
+        roles: defaultRolesState(),
+      });
+
+      setShowSendForm(false);
+
+      toast.success(
+        `Push илгээгдлээ. Идэвхтэй хэрэглэгч: ${data.targetUsers ?? 0}, амжилттай: ${data.successCount ?? 0}`
+      );
     } catch (error) {
       console.error("Мэдэгдэл илгээхэд алдаа гарлаа:", error);
       toast.error("Мэдэгдэл илгээхэд алдаа гарлаа");
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Хүлээн авагчийн нэрийг үүсгэх
-  const getReceiverName = (type: string, selectedIds: number[]) => {
-    switch (type) {
-      case "all":
-        return "Бүх ажилчид";
-      case "individual":
-        const user = users.find(u => u.id === selectedIds[0]);
-        return user ? user.name : "Хувь хүн";
-      case "selected":
-        return `${selectedIds.length} сонгогдсон ажилтан`;
-      default:
-        return type;
     }
   };
 
@@ -267,10 +226,9 @@ export default function NotificationsPage() {
     return priorityObj?.color || "bg-gray-100 text-gray-800";
   };
 
-  // Хүлээн авагчийн төрлийн нэр
   const getReceiverTypeLabel = (type: string) => {
-    const typeObj = receiverTypes.find(t => t.value === type);
-    return typeObj?.label || type;
+    if (type === "role_broadcast") return "Үүргээр (push)";
+    return type;
   };
 
   // Огноо форматлах
@@ -381,7 +339,7 @@ export default function NotificationsPage() {
                 Шинэ мэдэгдэл илгээх
               </h2>
               <p className="text-sm text-gray-500 mt-1">
-                Firebase ашиглан ажилчдад мэдэгдэл илгээх
+                Сонгосон үүргийн хэрэглэгчдэд push (FCM) илгээнэ
               </p>
             </div>
             <Button
@@ -396,6 +354,16 @@ export default function NotificationsPage() {
           
           <div className="p-6 overflow-y-auto h-[calc(100vh-80px)]">
             <div className="space-y-4">
+              {fcmReady === false && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Сервер дээр Firebase тохируулаагүй байна (.env дээр FIREBASE_SERVICE_ACCOUNT_JSON).
+                </div>
+              )}
+              {fcmReady === true && (
+                <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+                  Push илгээх бэлэн.
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Гарчиг *
@@ -469,63 +437,48 @@ export default function NotificationsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Хүлээн авагчид
-                </label>
-                <select
-                  value={newNotification.receiverType}
-                  onChange={(e) => setNewNotification(prev => ({
-                    ...prev,
-                    receiverType: e.target.value,
-                    selectedUsers: e.target.value === "individual" ? [] : prev.selectedUsers
-                  }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {receiverTypes.map(type => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {(newNotification.receiverType === "individual" || newNotification.receiverType === "selected") && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {newNotification.receiverType === "individual" ? "Хүлээн авагч" : "Сонгох ажилчид"}
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Хүлээн авагчид — системийн үүрэг
                   </label>
-                  <div className="space-y-2 max-h-40 overflow-y-auto border rounded-md p-2">
-                    {users.map(user => (
-                      <div key={user.id} className="flex items-center gap-2">
-                        <input
-                          type={newNotification.receiverType === "individual" ? "radio" : "checkbox"}
-                          id={`user-${user.id}`}
-                          checked={newNotification.selectedUsers.includes(user.id)}
-                          onChange={(e) => {
-                            if (newNotification.receiverType === "individual") {
-                              setNewNotification(prev => ({
-                                ...prev,
-                                selectedUsers: e.target.checked ? [user.id] : []
-                              }));
-                            } else {
-                              setNewNotification(prev => ({
-                                ...prev,
-                                selectedUsers: e.target.checked
-                                  ? [...prev.selectedUsers, user.id]
-                                  : prev.selectedUsers.filter(id => id !== user.id)
-                              }));
-                            }
-                          }}
-                        />
-                        <label htmlFor={`user-${user.id}`} className="flex-1 cursor-pointer">
-                          <div className="font-medium">{user.name}</div>
-                          <div className="text-sm text-gray-500">{user.role} - {user.department}</div>
-                        </label>
-                      </div>
-                    ))}
-                  </div>
+                  <button
+                    type="button"
+                    className="text-xs text-blue-600 hover:underline"
+                    onClick={() => {
+                      const allOn = SYSTEM_ROLES.every((r) => newNotification.roles[r.value]);
+                      const next: Record<string, boolean> = { ...newNotification.roles };
+                      for (const r of SYSTEM_ROLES) next[r.value] = !allOn;
+                      setNewNotification((prev) => ({ ...prev, roles: next }));
+                    }}
+                  >
+                    Бүгдийг сонгох / арилгах
+                  </button>
                 </div>
-              )}
+                <p className="text-xs text-gray-500 mb-2">
+                  Зөвхөн гар утсанд апп нээгээд нэвтэрсэн, FCM токен илгээсэн хэрэглэгчдэд хүрнэ.
+                </p>
+                <div className="space-y-2 border rounded-md p-3 bg-gray-50">
+                  {SYSTEM_ROLES.map((role) => (
+                    <div key={role.value} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id={`role-${role.value}`}
+                        checked={!!newNotification.roles[role.value]}
+                        onChange={(e) =>
+                          setNewNotification((prev) => ({
+                            ...prev,
+                            roles: { ...prev.roles, [role.value]: e.target.checked },
+                          }))
+                        }
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                      <label htmlFor={`role-${role.value}`} className="text-sm cursor-pointer flex-1">
+                        {role.label}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="flex gap-3 pt-4">
                 <Button
@@ -559,6 +512,11 @@ export default function NotificationsPage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
+            {notifications.length === 0 && (
+              <p className="text-sm text-gray-500 py-6 text-center">
+                Одоогоор түүх байхгүй. Push илгээсний дараа энд түр зуурын бүртгэл харагдана.
+              </p>
+            )}
             {notifications.map((notification) => (
               <div
                 key={notification.id}
@@ -631,22 +589,3 @@ export default function NotificationsPage() {
     </div>
   );
 }
-
-// X icon компонент нэмэх
-const X = ({ className }: { className?: string }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-  >
-    <path d="M18 6 6 18" />
-    <path d="m6 6 12 12" />
-  </svg>
-);

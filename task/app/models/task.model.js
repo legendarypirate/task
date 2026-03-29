@@ -49,7 +49,12 @@ module.exports = (sequelize, Sequelize) => {
     frequency_value: {
       type: Sequelize.INTEGER,
       allowNull: true,
-    }
+    },
+    /** Set when a "1 day before due" push was sent for this due_date (YYYY-MM-DD). Cleared when due_date changes. */
+    deadline_reminder_sent_for: {
+      type: Sequelize.DATEONLY,
+      allowNull: true,
+    },
   });
 
   return Task;

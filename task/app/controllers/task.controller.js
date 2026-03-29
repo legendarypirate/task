@@ -107,6 +107,10 @@ exports.update = async (req, res) => {
       payload.frequency_value = null;
     }
 
+    if (Object.prototype.hasOwnProperty.call(req.body, "due_date")) {
+      payload.deadline_reminder_sent_for = null;
+    }
+
     const result = await Task.update(payload, { where: { id } });
     if (result[0] === 0) {
       return res.status(404).send({ success: false, message: "Таск олдсонгүй" });
