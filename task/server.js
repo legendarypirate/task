@@ -25,8 +25,9 @@ app.use("/assets", express.static(path.join(__dirname, "app", "assets")));
 // Import models (Make sure to update the path if necessary)y
 const db = require("./app/models");
 
-// Sync database and handle any errors
-db.sequelize.sync()
+// Sync database and handle any errors.
+// `alter: true` lets Sequelize apply new columns we added to models (dev / single-server usage).
+db.sequelize.sync({ alter: true })
   .then(() => {
     console.log("Synced db.");
   })
