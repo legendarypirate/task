@@ -5,7 +5,7 @@ export interface User {
   phone: string;
   password?: string;
   role: "director" | "general_manager" | "supervisor" | "worker";
-  supervisor_id?: number;
+  supervisor_id?: number | number[];
   is_active: boolean;
   createdAt?: string;
   updatedAt?: string;

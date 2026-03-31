@@ -34,7 +34,9 @@ export default function UserForm({
     phone: user?.phone || "",
     password: "",
     role: user?.role || "worker",
-    supervisor_id: user?.supervisor_id || undefined as number | undefined,
+    supervisor_id: user?.supervisor_id 
+      ? (Array.isArray(user.supervisor_id) ? user.supervisor_id : [user.supervisor_id]) 
+      : [] as number[],
     is_active: user?.is_active ?? true,
   });
 
@@ -135,34 +137,35 @@ export default function UserForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="supervisor_id">Supervisor</Label>
-        <Select
-          value={formData.supervisor_id?.toString() || "none"}
-          onValueChange={(value) => 
-            setFormData({
-              ...formData, 
-              supervisor_id: value === "none" ? undefined : Number(value)
-            })
-          }
-          disabled={loading}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select supervisor (optional)" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">No Supervisor</SelectItem>
-            {supervisors.map((supervisor) => (
-              <SelectItem 
-                key={supervisor.id} 
-                value={supervisor.id.toString()}
-              >
+        <Label>Supervisors</Label>
+        <div className="space-y-2 max-h-48 overflow-y-auto p-3 border rounded-md bg-gray-50 dark:bg-neutral-800">
+          {supervisors.map((supervisor) => (
+            <label key={supervisor.id} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 p-1 rounded transition-colors">
+              <input
+                type="checkbox"
+                checked={Array.isArray(formData.supervisor_id) && formData.supervisor_id.includes(supervisor.id)}
+                onChange={(e) => {
+                  const current = Array.isArray(formData.supervisor_id) ? formData.supervisor_id : [];
+                  if (e.target.checked) {
+                    setFormData({ ...formData, supervisor_id: [...current, supervisor.id] });
+                  } else {
+                    setFormData({ ...formData, supervisor_id: current.filter(id => id !== supervisor.id) });
+                  }
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                disabled={loading}
+              />
+              <span className="text-sm text-gray-700 dark:text-gray-300">
                 {supervisor.full_name} ({formatRole(supervisor.role)})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+              </span>
+            </label>
+          ))}
+          {supervisors.length === 0 && (
+            <p className="text-sm text-gray-500 italic">No available supervisors</p>
+          )}
+        </div>
         <p className="text-sm text-gray-500">
-          Optional: Only users with "Supervisor" role are listed
+          Check one or more supervisors for this user
         </p>
       </div>
 

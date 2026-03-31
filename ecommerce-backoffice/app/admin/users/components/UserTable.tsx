@@ -26,7 +26,11 @@ interface UserWithSupervisor extends User {
     id: number;
     full_name: string;
     role: string;
-  };
+  } | Array<{
+    id: number;
+    full_name: string;
+    role: string;
+  }>;
 }
 
 export default function UserTable({ 
@@ -39,18 +43,28 @@ export default function UserTable({
   // Type cast users to include supervisor
   const typedUsers = users as UserWithSupervisor[];
 
-  // Helper function to get supervisor name - now uses supervisor object
-  const getSupervisorName = (user: UserWithSupervisor) => {
+  // Helper function to get supervisor names
+  const getSupervisorNames = (user: UserWithSupervisor) => {
     if (!user.supervisor_id) return "None";
     
     // If supervisor object exists, use it
     if (user.supervisor) {
-      return `${user.supervisor.full_name}`;
+      const supervisors = Array.isArray(user.supervisor) ? user.supervisor : [user.supervisor];
+      if (supervisors.length > 0) {
+        return supervisors.map(s => s.full_name).join(", ");
+      }
     }
     
     // Fallback: search in users array
-    const supervisor = typedUsers.find(u => u.id === user.supervisor_id);
-    return supervisor ? supervisor.full_name : `ID: ${user.supervisor_id}`;
+    const ids = Array.isArray(user.supervisor_id) ? user.supervisor_id : [user.supervisor_id];
+    if (ids.length === 0) return "None";
+    
+    const names = ids.map(id => {
+      const supervisor = typedUsers.find(u => u.id === id);
+      return supervisor ? supervisor.full_name : `ID: ${id}`;
+    });
+    
+    return names.join(", ");
   };
 
   const getRoleBadge = (role: string) => {
@@ -135,18 +149,15 @@ export default function UserTable({
                 <td className="p-4">
                   <div className="flex flex-col space-y-1">
                     <span className="text-gray-600">
-                      {getSupervisorName(user)}
+                      {getSupervisorNames(user)}
                     </span>
                     {user.supervisor && (
-                      <div className="flex items-center space-x-2">
-                        <Badge variant="outline" className="text-xs">
-                          {user.supervisor.role}
-                        </Badge>
-                        {user.supervisor_id && (
-                          <span className="text-xs text-gray-500">
-                            ID: {user.supervisor_id}
-                          </span>
-                        )}
+                      <div className="flex flex-wrap gap-1">
+                        {(Array.isArray(user.supervisor) ? user.supervisor : [user.supervisor]).map((s) => (
+                          <Badge key={s.id} variant="outline" className="text-xs">
+                            {s.role} (ID: {s.id})
+                          </Badge>
+                        ))}
                       </div>
                     )}
                   </div>
