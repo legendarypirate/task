@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { useDroppable } from "@dnd-kit/core";
-import { TaskCard } from "@/components/task/TaskCard";
+import { TaskCard, type Task as CardTask } from "@/components/task/TaskCard";
 import { X, List, Grid, Plus, Edit, User, Save, Trash2, Eye } from "lucide-react";
 
 const columns = ["pending", "in_progress", "done", "verified", "cancelled"] as const;
@@ -30,16 +30,7 @@ const STATUS_LABELS: Record<(typeof columns)[number], string> = {
   cancelled: "Цуцалсан",
 };
 
-interface Task {
-  id: number;
-  title: string;
-  description?: string;
-  status: string;
-  priority: string;
-  created_by: number;
-  assigned_to?: number;
-  supervisor_id?: number;
-  due_date?: string;
+interface Task extends CardTask {
   image?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -173,7 +164,9 @@ function EditTaskModal({
         description: task.description || "",
         priority: task.priority,
         status: task.status,
-        assigned_to: task.assigned_to,
+        assigned_to: task.assigned_to 
+          ? (Array.isArray(task.assigned_to) ? task.assigned_to : [task.assigned_to]) 
+          : [],
         supervisor_id: task.supervisor_id,
         due_date: task.due_date ? task.due_date.split('T')[0] : "",
       });
@@ -336,21 +329,31 @@ function EditTaskModal({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Хуваарилагдсан
-                </label>
-                <select
-                  value={formData.assigned_to || ""}
-                  onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value ? parseInt(e.target.value) : undefined })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
-                >
-                  <option value="">Сонгох</option>
+                <div className="space-y-2 max-h-40 overflow-y-auto p-2 border border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700">
                   {supervisors.map((supervisor) => (
-                    <option key={supervisor.id} value={supervisor.id}>
-                      {supervisor.full_name}
-                    </option>
+                    <label key={supervisor.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-600 p-1 rounded transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={Array.isArray(formData.assigned_to) && formData.assigned_to.includes(supervisor.id)}
+                        onChange={(e) => {
+                          const current = Array.isArray(formData.assigned_to) ? formData.assigned_to : [];
+                          if (e.target.checked) {
+                            setFormData({ ...formData, assigned_to: [...current, supervisor.id] });
+                          } else {
+                            setFormData({ ...formData, assigned_to: current.filter(id => id !== supervisor.id) });
+                          }
+                        }}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        {supervisor.full_name}
+                      </span>
+                    </label>
                   ))}
-                </select>
+                  {supervisors.length === 0 && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 italic">Сонгох боломжтой хэрэглэгч байхгүй</p>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -517,7 +520,7 @@ function CreateTaskDrawer({
     title: "",
     description: "",
     priority: "normal" as "low" | "normal" | "high",
-    assigned_to: "",
+    assigned_to: [] as number[],
     supervisor_id: "",
     due_date: "",
   });
@@ -531,7 +534,7 @@ function CreateTaskDrawer({
       priority: formData.priority,
       status: "pending",
       created_by: 1, // This should be the logged-in user's ID
-      assigned_to: formData.assigned_to ? parseInt(formData.assigned_to) : undefined,
+      assigned_to: formData.assigned_to,
       supervisor_id: formData.supervisor_id ? parseInt(formData.supervisor_id) : undefined,
       due_date: formData.due_date || undefined,
     };
@@ -541,7 +544,7 @@ function CreateTaskDrawer({
       title: "",
       description: "",
       priority: "normal",
-      assigned_to: "",
+      assigned_to: [],
       supervisor_id: "",
       due_date: "",
     });
@@ -617,20 +620,29 @@ function CreateTaskDrawer({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Хэн рүү даалгаварлах
+                Хэн рүү даалгаварлах
             </label>
-            <select
-              value={formData.assigned_to}
-              onChange={(e) => setFormData({ ...formData, assigned_to: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
-            >
-              <option value="">Сонгох</option>
+            <div className="space-y-2 max-h-40 overflow-y-auto p-2 border border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700">
               {supervisors.map((supervisor) => (
-                <option key={supervisor.id} value={supervisor.id}>
-                  {supervisor.full_name} ({supervisor.email})
-                </option>
+                <label key={supervisor.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-600 p-1 rounded transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={formData.assigned_to.includes(supervisor.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setFormData({ ...formData, assigned_to: [...formData.assigned_to, supervisor.id] });
+                      } else {
+                        setFormData({ ...formData, assigned_to: formData.assigned_to.filter(id => id !== supervisor.id) });
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">
+                    {supervisor.full_name} ({supervisor.email})
+                  </span>
+                </label>
               ))}
-            </select>
+            </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Зөвхөн supervisor эрхтэй хэрэглэгчдэд даалгаварлах боломжтой
             </p>
@@ -719,6 +731,17 @@ function TaskListScreen({
     return supervisor ? supervisor.full_name : 'Томилогдоогүй';
   };
 
+  const getAssigneeNames = (assignedTo?: number | number[]) => {
+    if (!assignedTo) return 'Томилогдоогүй';
+    const ids = Array.isArray(assignedTo) ? assignedTo : [assignedTo];
+    if (ids.length === 0) return 'Томилогдоогүй';
+    
+    return ids.map(id => {
+      const supervisor = supervisors.find(s => s.id === id);
+      return supervisor ? supervisor.full_name : `ID: ${id}`;
+    }).join(", ");
+  };
+
   const hasImage = (task: Task) => {
     return task.image && task.image !== null && task.image !== "null";
   };
@@ -749,6 +772,9 @@ function TaskListScreen({
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Ангилал
+              </th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Хуваарилагдсан
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Supervisor
@@ -791,6 +817,11 @@ function TaskListScreen({
                   <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getPriorityColor(task.priority)}`}>
                     {task.priority}
                   </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                  <div className="max-w-xs truncate" title={getAssigneeNames(task.assigned_to)}>
+                    {getAssigneeNames(task.assigned_to)}
+                  </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   {getSupervisorName(task.supervisor_id)}
@@ -1012,12 +1043,22 @@ export default function TaskManagementPage() {
     return source.filter((task) => {
       if (isVerifiedFromPriorMonth(task)) return false;
       if (statusFilter !== "all" && task.status !== statusFilter) return false;
-      if (workerFilter !== "all" && String(task.assigned_to ?? "") !== workerFilter) return false;
+      if (workerFilter !== "all") {
+        const wid = Number(workerFilter);
+        const assigned = task.assigned_to;
+        if (Array.isArray(assigned)) {
+          if (!assigned.includes(wid)) return false;
+        } else if (String(assigned ?? "") !== workerFilter) {
+          return false;
+        }
+      }
       if (supervisorFilter !== "all") {
         const sid = Number(supervisorFilter);
         const matchesSupervisorField = task.supervisor_id === sid;
         // Some flows assign the supervisor as assignee (assigned_to).
-        const matchesAssignedSupervisor = task.assigned_to === sid;
+        const matchesAssignedSupervisor = Array.isArray(task.assigned_to) 
+          ? task.assigned_to.includes(sid)
+          : task.assigned_to === sid;
         if (!matchesSupervisorField && !matchesAssignedSupervisor) return false;
       }
       return true;

@@ -3,14 +3,14 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-interface Task {
+export interface Task {
   id: number;
   title: string;
   description?: string;
   status: string;
   priority: string;
   created_by: number;
-  assigned_to?: number;
+  assigned_to?: number | number[];
   supervisor_id?: number;
   due_date?: string;
 }
@@ -62,6 +62,17 @@ export function TaskCard({ task, column }: TaskCardProps) {
     return new Date(dateString).toLocaleDateString();
   };
 
+  const renderAssignees = () => {
+    if (!task.assigned_to) return null;
+    const assignees = Array.isArray(task.assigned_to) ? task.assigned_to : [task.assigned_to];
+    if (assignees.length === 0) return null;
+    return (
+      <span className="text-gray-500">
+        Хүртэгч: {assignees.join(", ")}
+      </span>
+    );
+  };
+
   return (
     <div
       ref={setNodeRef}
@@ -90,9 +101,7 @@ export function TaskCard({ task, column }: TaskCardProps) {
           <span className={`font-medium ${getPriorityColor(task.priority)}`}>
             {task.priority}
           </span>
-          {task.assigned_to && (
-            <span className="text-gray-500">Хүртэгч: {task.assigned_to}</span>
-          )}
+          {renderAssignees()}
         </div>
         
         {task.due_date && (
