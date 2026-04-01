@@ -19,8 +19,9 @@ module.exports = (sequelize, Sequelize) => {
       defaultValue: "worker",
     },
     supervisor_id: {
-      type: Sequelize.INTEGER,
+      type: Sequelize.ARRAY(Sequelize.INTEGER),
       allowNull: true,
+      defaultValue: [],
     },
     is_active: {
       type: Sequelize.BOOLEAN,

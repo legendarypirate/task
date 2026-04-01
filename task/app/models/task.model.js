@@ -13,12 +13,14 @@ module.exports = (sequelize, Sequelize) => {
       allowNull: false,
     },
     assigned_to: {
-      type: Sequelize.INTEGER,
+      type: Sequelize.ARRAY(Sequelize.INTEGER),
       allowNull: true,
+      defaultValue: [],
     },
     supervisor_id: {
-      type: Sequelize.INTEGER,
+      type: Sequelize.ARRAY(Sequelize.INTEGER),
       allowNull: true,
+      defaultValue: [],
     },
     priority: {
       type: Sequelize.ENUM("low", "normal", "high"),

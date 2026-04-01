@@ -12,6 +12,15 @@ function toNullableInt(value) {
   return Number.isFinite(n) ? n : null;
 }
 
+function toNullableIntArray(value) {
+  if (value === undefined || value === null || value === "") return null;
+  if (Array.isArray(value)) {
+    return value.map(v => Number(v)).filter(n => Number.isFinite(n));
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? [n] : null;
+}
+
 function toNullableDate(value) {
   if (value === undefined || value === null || value === "") return null;
   const d = new Date(value);
@@ -27,8 +36,8 @@ exports.create = async (req, res) => {
     }
 
     const normalizedFrequencyType = frequency_type || "none";
-    const normalizedAssignedTo = toNullableInt(assigned_to);
-    const normalizedSupervisorId = toNullableInt(supervisor_id);
+    const normalizedAssignedTo = toNullableIntArray(assigned_to);
+    const normalizedSupervisorId = toNullableIntArray(supervisor_id);
     const normalizedDueDate =
       normalizedFrequencyType === "none" ? toNullableDate(due_date) : null;
     const normalizedFrequencyValue =
@@ -89,10 +98,10 @@ exports.update = async (req, res) => {
     const id = req.params.id;
     const payload = { ...req.body };
     if (Object.prototype.hasOwnProperty.call(payload, "assigned_to")) {
-      payload.assigned_to = toNullableInt(payload.assigned_to);
+      payload.assigned_to = toNullableIntArray(payload.assigned_to);
     }
     if (Object.prototype.hasOwnProperty.call(payload, "supervisor_id")) {
-      payload.supervisor_id = toNullableInt(payload.supervisor_id);
+      payload.supervisor_id = toNullableIntArray(payload.supervisor_id);
     }
     if (Object.prototype.hasOwnProperty.call(payload, "due_date")) {
       payload.due_date = toNullableDate(payload.due_date);
