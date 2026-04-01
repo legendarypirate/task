@@ -26,14 +26,28 @@ app.use("/assets", express.static(path.join(__dirname, "app", "assets")));
 const db = require("./app/models");
 
 // Sync database and handle any errors.
-// `alter: true` lets Sequelize apply new columns we added to models (dev / single-server usage).
-db.sequelize.sync({ alter: true })
-  .then(() => {
-    console.log("Synced db.");
-  })
-  .catch((err) => {
-    console.log("Failed to sync db: " + err.message);
-  });
+// Run manual migrations before sync to handle type casting from integer to integer array
+const runMigrations = async () => {
+  try {
+    await db.sequelize.query('ALTER TABLE users ALTER COLUMN supervisor_id TYPE integer[] USING CASE WHEN supervisor_id IS NOT NULL THEN ARRAY[supervisor_id] ELSE \'{}\'::integer[] END;');
+    await db.sequelize.query('ALTER TABLE tasks ALTER COLUMN supervisor_id TYPE integer[] USING CASE WHEN supervisor_id IS NOT NULL THEN ARRAY[supervisor_id] ELSE \'{}\'::integer[] END;');
+    await db.sequelize.query('ALTER TABLE tasks ALTER COLUMN assigned_to TYPE integer[] USING CASE WHEN assigned_to IS NOT NULL THEN ARRAY[assigned_to] ELSE \'{}\'::integer[] END;');
+    console.log("Custom migrations executed");
+  } catch (err) {
+    // Ignore errors, they might already be arrays or tables might not exist yet
+  }
+};
+
+runMigrations().then(() => {
+  // `alter: true` lets Sequelize apply new columns we added to models (dev / single-server usage).
+  db.sequelize.sync({ alter: true })
+    .then(() => {
+      console.log("Synced db.");
+    })
+    .catch((err) => {
+      console.log("Failed to sync db: " + err.message);
+    });
+});
 
 // simple route
 app.get("/", (req, res) => {
