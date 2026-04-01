@@ -35,17 +35,12 @@ db.reviews = require("./review.model.js")(sequelize, Sequelize);
 db.cart_items = require("./cart_item.model.js")(sequelize, Sequelize);
 
 // ====== EXISTING RELATIONSHIPS ======
-// Task relationships
+// Task relationships (only created_by is a plain integer FK; assigned_to & supervisor_id are integer arrays)
 db.users.hasMany(db.tasks, { foreignKey: "created_by", as: "createdTasks" });
-db.users.hasMany(db.tasks, { foreignKey: "assigned_to", as: "assignedTasks" });
-db.users.hasMany(db.tasks, { foreignKey: "supervisor_id", as: "supervisedTasks" });
 db.tasks.belongsTo(db.users, { foreignKey: "created_by", as: "creator" });
-db.tasks.belongsTo(db.users, { foreignKey: "assigned_to", as: "assignee" });
-db.tasks.belongsTo(db.users, { foreignKey: "supervisor_id", as: "supervisor" });
-
-// Supervisor relationship (self-reference)
-db.users.belongsTo(db.users, { foreignKey: "supervisor_id", as: "supervisor" });
-db.users.hasMany(db.users, { foreignKey: "supervisor_id", as: "subordinates" });
+// NOTE: assigned_to and supervisor_id are now integer[] arrays, so we cannot use
+// standard Sequelize belongsTo/hasMany associations for them.
+// Supervisor data must be resolved manually in controllers.
 
 // ====== E-COMMERCE RELATIONSHIPS ======
 // Product - ProductVariation relationships

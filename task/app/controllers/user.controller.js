@@ -70,17 +70,30 @@ exports.create = async (req, res) => {
 exports.findAll = async (req, res) => {
   try {
     const users = await User.findAll({
-      include: [{
-        model: User,
-        as: 'supervisor',
-        attributes: ['id', 'full_name', 'role'] // Only include needed fields
-      }],
-      order: [['id', 'DESC']] // Order by id in descending order
+      order: [['id', 'DESC']]
+    });
+
+    // Manually resolve supervisor data from supervisor_id arrays
+    const userMap = {};
+    for (const u of users) {
+      userMap[u.id] = { id: u.id, full_name: u.full_name, role: u.role };
+    }
+
+    const usersWithSupervisors = users.map(u => {
+      const userData = u.toJSON();
+      if (Array.isArray(userData.supervisor_id) && userData.supervisor_id.length > 0) {
+        userData.supervisors = userData.supervisor_id
+          .map(sid => userMap[sid])
+          .filter(Boolean);
+      } else {
+        userData.supervisors = [];
+      }
+      return userData;
     });
 
     res.json({
       success: true,
-      data: users
+      data: usersWithSupervisors
     });
   } catch (error) {
     res.status(500).json({

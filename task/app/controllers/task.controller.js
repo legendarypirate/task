@@ -231,16 +231,6 @@ exports.assignSupervisor = async (req, res) => {
           model: User,
           as: 'creator',
           attributes: ['id', 'full_name', 'phone', 'role']
-        },
-        {
-          model: User,
-          as: 'assignee',
-          attributes: ['id', 'full_name', 'phone', 'role']
-        },
-        {
-          model: User,
-          as: 'supervisor',
-          attributes: ['id', 'full_name', 'phone', 'role']
         }
       ]
     });
