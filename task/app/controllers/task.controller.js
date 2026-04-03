@@ -195,7 +195,7 @@ exports.assignSupervisor = async (req, res) => {
     const User = db.users;
 
     const supervisor = await User.findByPk(supervisor_id);
-    
+
     if (!supervisor) {
       return res.status(404).json({
         success: false,
@@ -253,7 +253,7 @@ exports.assignSupervisor = async (req, res) => {
 // ---------------------- UPDATE STATUS (KANBAN DRAG) ----------------------
 exports.updateStatus = async (req, res) => {
   const t = await db.sequelize.transaction();
-  
+
   try {
     // DEBUG: Log everything
     console.log('=== UPDATE STATUS DEBUG ===');
@@ -261,26 +261,26 @@ exports.updateStatus = async (req, res) => {
     console.log('Body:', req.body);
     console.log('File:', req.file);
     console.log('Headers content-type:', req.headers['content-type']);
-    
+
     const { id } = req.params;
-    
+
     // IMPORTANT: For multipart/form-data, body parser doesn't work
     // We need to read status from req.body if available, or from query
     let status = req.body.status;
-    
+
     // If status is not in body, check query or try to parse manually
     if (!status) {
       status = req.query.status;
       console.log('Status not in body, trying query:', status);
     }
-    
+
     // If still not found, the request might not be parsed properly
     if (!status) {
       console.log('❌ STATUS NOT FOUND! Check multer configuration');
       console.log('Full request object keys:', Object.keys(req));
       await t.rollback();
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         message: "Статус олдсонгүй!",
         debug: {
           params: req.params,
@@ -292,13 +292,13 @@ exports.updateStatus = async (req, res) => {
     }
 
     const validStatuses = ["pending", "in_progress", "done", "verified", "cancelled"];
-    
+
     if (!validStatuses.includes(status)) {
       console.log('❌ Invalid status received:', status);
       console.log('Valid statuses:', validStatuses);
       await t.rollback();
-      return res.status(400).json({ 
-        success: false, 
+      return res.status(400).json({
+        success: false,
         message: "Буруу статус байна!",
         debug: {
           receivedStatus: status,
@@ -310,9 +310,9 @@ exports.updateStatus = async (req, res) => {
     const task = await Task.findByPk(id, { transaction: t });
     if (!task) {
       await t.rollback();
-      return res.status(404).json({ 
-        success: false, 
-        message: "Даалгавар олдсонгүй" 
+      return res.status(404).json({
+        success: false,
+        message: "Даалгавар олдсонгүй"
       });
     }
 
@@ -321,20 +321,20 @@ exports.updateStatus = async (req, res) => {
     // ✅ Only require image when status changes to "done"
     if (status === "done" && !req.file) {
       await t.rollback();
-      return res.status(400).json({ 
-        success: false, 
-        message: "'Дууссан' статус руу шилжихэд зураг шаардлагатай!" 
+      return res.status(400).json({
+        success: false,
+        message: "'Дууссан' статус руу шилжихэд зураг шаардлагатай!"
       });
     }
 
     // ✅ Handle image upload if file exists
     if (req.file) {
       console.log('📁 File received:', req.file.originalname, 'size:', req.file.size);
-      
+
       // Create temporary file
       const tempPath = path.join(__dirname, `../tmp/${Date.now()}.png`);
       const tmpDir = path.dirname(tempPath);
-      
+
       if (!fs.existsSync(tmpDir)) {
         fs.mkdirSync(tmpDir, { recursive: true });
       }
@@ -354,32 +354,32 @@ exports.updateStatus = async (req, res) => {
 
       // Clean up temp file
       fs.unlinkSync(tempPath);
-      
+
       updateData.image = result.secure_url;
     }
 
     // Update task
     await task.update(updateData, { transaction: t });
-    
+
     await t.commit();
 
     console.log('✅ Status updated successfully:', status);
     console.log('Task ID:', id);
     console.log('=== END DEBUG ===');
 
-    res.status(200).json({ 
-      success: true, 
-      message: "Төлөв амжилттай шинэчлэгдлээ", 
-      data: task 
+    res.status(200).json({
+      success: true,
+      message: "Төлөв амжилттай шинэчлэгдлээ",
+      data: task
     });
 
   } catch (err) {
     await t.rollback();
     console.error("🔥 Төлөв шинэчлэхэд алдаа гарлаа:", err);
     console.error("🔥 Error stack:", err.stack);
-    res.status(500).json({ 
-      success: false, 
-      message: "Серверийн алдаа: " + err.message 
+    res.status(500).json({
+      success: false,
+      message: "Серверийн алдаа: " + err.message
     });
   }
 };
@@ -578,7 +578,7 @@ exports.getCalendarTasks = async (req, res) => {
 
     // Календарт харуулах task-уудыг бэлтгэх
     const calendarTasks = [];
-    
+
     for (const task of tasks) {
       if (task.frequency_type === 'none') {
         // Энгийн task - due_date шалгах
@@ -647,7 +647,7 @@ exports.assignToWorker = async (req, res) => {
       }
     );
 
-    
+
     return res.status(200).json({
       success: true,
       message: "Даалгавар амжилттай хуваарилагдлаа",
@@ -682,7 +682,7 @@ exports.generateRecurringTasks = async (req, res) => {
 
     for (const template of recurringTasks) {
       const instances = generateTaskInstances(template, year, month);
-      
+
       for (const instance of instances) {
         // Шалгах: энэ өдөр энэ task аль хэдийн үүссэн эсэх
         const existingTask = await Task.findOne({
@@ -733,8 +733,8 @@ exports.generateRecurringTasks = async (req, res) => {
 // Тухайн сард өдөр байгаа эсэхийг шалгах
 function isDateInMonth(date, year, month) {
   const checkDate = new Date(date);
-  return checkDate.getFullYear() === parseInt(year) && 
-         checkDate.getMonth() === parseInt(month) - 1;
+  return checkDate.getFullYear() === parseInt(year) &&
+    checkDate.getMonth() === parseInt(month) - 1;
 }
 
 // Давтамжтай task-ийн instance үүсгэх
@@ -742,7 +742,7 @@ function generateTaskInstances(task, year, month) {
   const instances = [];
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0);
-  
+
   let currentDate = new Date(startDate);
 
   while (currentDate <= endDate) {
@@ -752,13 +752,13 @@ function generateTaskInstances(task, year, month) {
       case 'daily':
         shouldCreate = true;
         break;
-        
+
       case 'weekly':
         if (currentDate.getDay() === task.frequency_value) {
           shouldCreate = true;
         }
         break;
-        
+
       case 'monthly':
         if (currentDate.getDate() === task.frequency_value) {
           shouldCreate = true;

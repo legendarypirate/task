@@ -74,12 +74,12 @@ interface User {
 }
 
 // Image View Modal Component
-function ImageViewModal({ 
-  isOpen, 
-  onClose, 
-  imageUrl 
-}: { 
-  isOpen: boolean; 
+function ImageViewModal({
+  isOpen,
+  onClose,
+  imageUrl
+}: {
+  isOpen: boolean;
   onClose: () => void;
   imageUrl: string | null;
 }) {
@@ -87,11 +87,11 @@ function ImageViewModal({
 
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
-      <div 
+      <div
         className="absolute inset-0 bg-black/80"
         onClick={onClose}
       />
-      
+
       <div className="relative bg-white dark:bg-neutral-800 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
         {/* Header */}
         <div className="sticky top-0 bg-white dark:bg-neutral-800 border-b border-gray-200 dark:border-neutral-700 p-4">
@@ -107,7 +107,7 @@ function ImageViewModal({
             </button>
           </div>
         </div>
-        
+
         {/* Image Content */}
         <div className="p-4 flex items-center justify-center">
           <img
@@ -119,7 +119,7 @@ function ImageViewModal({
             }}
           />
         </div>
-        
+
         {/* Footer */}
         <div className="sticky bottom-0 bg-white dark:bg-neutral-800 border-t border-gray-200 dark:border-neutral-700 p-4">
           <div className="flex justify-end">
@@ -139,15 +139,15 @@ function ImageViewModal({
 }
 
 // Edit Task Modal Component
-function EditTaskModal({ 
-  isOpen, 
-  onClose, 
-  task, 
+function EditTaskModal({
+  isOpen,
+  onClose,
+  task,
   supervisors,
   onSave,
   onDelete
-}: { 
-  isOpen: boolean; 
+}: {
+  isOpen: boolean;
   onClose: () => void;
   task: Task | null;
   supervisors: User[];
@@ -164,8 +164,8 @@ function EditTaskModal({
         description: task.description || "",
         priority: task.priority,
         status: task.status,
-        assigned_to: task.assigned_to 
-          ? (Array.isArray(task.assigned_to) ? task.assigned_to : [task.assigned_to]) 
+        assigned_to: task.assigned_to
+          ? (Array.isArray(task.assigned_to) ? task.assigned_to : [task.assigned_to])
           : [],
         supervisor_id: task.supervisor_id,
         due_date: task.due_date ? task.due_date.split('T')[0] : "",
@@ -203,11 +203,11 @@ function EditTaskModal({
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
       {/* Semi-transparent backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/30 dark:bg-black/40"
         onClick={onClose}
       />
-      
+
       {/* Modal content */}
       <div className="relative bg-white dark:bg-neutral-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
@@ -238,7 +238,7 @@ function EditTaskModal({
             </div>
           </div>
         </div>
-        
+
         {/* Delete Confirmation */}
         {isDeleting && (
           <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mx-6 mt-4">
@@ -260,7 +260,7 @@ function EditTaskModal({
             </div>
           </div>
         )}
-        
+
         {/* Content */}
         <div className="p-6">
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -505,14 +505,14 @@ function Column({
 }
 
 // Create Task Drawer Component
-function CreateTaskDrawer({ 
-  isOpen, 
-  onClose, 
+function CreateTaskDrawer({
+  isOpen,
+  onClose,
   onCreate,
-  supervisors 
-}: { 
-  isOpen: boolean; 
-  onClose: () => void; 
+  supervisors
+}: {
+  isOpen: boolean;
+  onClose: () => void;
   onCreate: (task: Omit<Task, 'id'>) => void;
   supervisors: User[];
 }) {
@@ -527,7 +527,7 @@ function CreateTaskDrawer({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const newTask: Omit<Task, 'id'> = {
       title: formData.title,
       description: formData.description || undefined,
@@ -572,7 +572,7 @@ function CreateTaskDrawer({
           <X className="h-5 w-5 text-gray-600 dark:text-gray-300" />
         </button>
       </div>
-      
+
       {/* Content */}
       <div className="p-6 overflow-y-auto h-[calc(100vh-80px)]">
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -620,7 +620,7 @@ function CreateTaskDrawer({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Хэн рүү даалгаварлах
+              Хэн рүү даалгаварлах
             </label>
             <div className="space-y-2 max-h-40 overflow-y-auto p-2 border border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700">
               {supervisors.map((supervisor) => (
@@ -682,12 +682,12 @@ function CreateTaskDrawer({
 }
 
 // Task List Component (New)
-function TaskListScreen({ 
-  tasks, 
+function TaskListScreen({
+  tasks,
   supervisors,
   onAssignSupervisor,
-  onEditTask 
-}: { 
+  onEditTask
+}: {
   tasks: Task[];
   supervisors: User[];
   onAssignSupervisor: (taskId: number, supervisorId: number) => void;
@@ -735,7 +735,7 @@ function TaskListScreen({
     if (!assignedTo) return 'Томилогдоогүй';
     const ids = Array.isArray(assignedTo) ? assignedTo : [assignedTo];
     if (ids.length === 0) return 'Томилогдоогүй';
-    
+
     return ids.map(id => {
       const supervisor = supervisors.find(s => s.id === id);
       return supervisor ? supervisor.full_name : `ID: ${id}`;
@@ -871,14 +871,14 @@ function TaskListScreen({
       {/* Assign Supervisor Modal */}
       {selectedTask && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
-          <div 
+          <div
             className="absolute inset-0 bg-black/30 dark:bg-black/40"
             onClick={() => {
               setSelectedTask(null);
               setSelectedSupervisor("");
             }}
           />
-          
+
           <div className="relative bg-white dark:bg-neutral-800 rounded-lg shadow-xl max-w-md w-full p-6 animate-in zoom-in duration-200">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -894,13 +894,13 @@ function TaskListScreen({
                 <X className="h-4 w-4 text-gray-600 dark:text-gray-300" />
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Даалгавар:</p>
                 <p className="font-medium text-gray-900 dark:text-gray-200">{selectedTask.title}</p>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Supervisor сонгох
@@ -953,13 +953,13 @@ function TaskListScreen({
 }
 
 // Main Kanban Component
-function KanbanBoard({ 
-  columnTasks, 
-  activeTask, 
-  sensors, 
-  onDragStart, 
-  onDragEnd 
-}: { 
+function KanbanBoard({
+  columnTasks,
+  activeTask,
+  sensors,
+  onDragStart,
+  onDragEnd
+}: {
   columnTasks: Record<string, Task[]>;
   activeTask: Task | null;
   sensors: any;
@@ -974,9 +974,9 @@ function KanbanBoard({
         </h1>
       </div>
 
-      <DndContext 
-        sensors={sensors} 
-        collisionDetection={closestCenter} 
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
       >
@@ -1025,7 +1025,7 @@ export default function TaskManagementPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [workerFilter, setWorkerFilter] = useState<string>("all");
   const [supervisorFilter, setSupervisorFilter] = useState<string>("all");
-  
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -1056,7 +1056,7 @@ export default function TaskManagementPage() {
         const sid = Number(supervisorFilter);
         const matchesSupervisorField = task.supervisor_id === sid;
         // Some flows assign the supervisor as assignee (assigned_to).
-        const matchesAssignedSupervisor = Array.isArray(task.assigned_to) 
+        const matchesAssignedSupervisor = Array.isArray(task.assigned_to)
           ? task.assigned_to.includes(sid)
           : task.assigned_to === sid;
         if (!matchesSupervisorField && !matchesAssignedSupervisor) return false;
@@ -1088,14 +1088,14 @@ export default function TaskManagementPage() {
   const fetchUsers = async () => {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user`);
-      
+
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
-      
+
       const json = await res.json();
       let supervisorData: User[] = [];
-      
+
       if (Array.isArray(json.data)) {
         supervisorData = json.data;
       } else if (Array.isArray(json)) {
@@ -1103,11 +1103,11 @@ export default function TaskManagementPage() {
       } else if (json.data && Array.isArray(json.data)) {
         supervisorData = json.data;
       }
-      
+
       const normalizedUsers = supervisorData
         .map((user: any) => {
           let fullName = user.full_name;
-          
+
           if (!fullName) {
             if (user.first_name && user.last_name) {
               fullName = `${user.first_name} ${user.last_name}`;
@@ -1119,7 +1119,7 @@ export default function TaskManagementPage() {
               fullName = `User ${user.id}`;
             }
           }
-          
+
           return {
             ...user,
             full_name: fullName
@@ -1131,7 +1131,7 @@ export default function TaskManagementPage() {
         ;
       const filteredWorkers = normalizedUsers
         .filter((user: any) => user.role?.toLowerCase() === 'worker');
-      
+
       setSupervisors(filteredSupervisors);
       setWorkers(filteredWorkers);
     } catch (err) {
@@ -1145,9 +1145,9 @@ export default function TaskManagementPage() {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/task`);
       const json = await res.json();
-      
+
       let fetchedTasks: Task[] = [];
-      
+
       if (Array.isArray(json.data)) {
         fetchedTasks = json.data;
       } else if (Array.isArray(json)) {
@@ -1155,10 +1155,10 @@ export default function TaskManagementPage() {
       } else if (json.data && Array.isArray(json.data)) {
         fetchedTasks = json.data;
       }
-      
+
       fetchedTasks.sort((a, b) => b.id - a.id);
       setTasks(fetchedTasks);
-      
+
       const grouped: Record<string, Task[]> = {};
       columns.forEach((c) => {
         grouped[c] = fetchedTasks.filter((t: Task) => t.status === c);
@@ -1263,7 +1263,7 @@ export default function TaskManagementPage() {
   const onDragStart = (e: DragStartEvent) => {
     const { active } = e;
     const taskId = active.id;
-    
+
     for (const column of columns) {
       const task = columnTasks[column]?.find(t => t.id === taskId);
       if (task) {
@@ -1286,7 +1286,7 @@ export default function TaskManagementPage() {
 
     const sourceColumn = active.data.current?.column;
     let targetColumn = over.data.current?.column;
-    
+
     if (!targetColumn && over.data.current?.type === "task") {
       targetColumn = over.data.current.column;
     } else if (over.data.current?.type === "column") {
@@ -1358,29 +1358,27 @@ export default function TaskManagementPage() {
             <div>
               <h1 className="text-2xl font-bold text-gray-800 dark:text-gray-200">
                 Үүрэг даалгаврын систем
-              </h1>  
+              </h1>
             </div>
             <div className="flex items-center gap-4">
               {/* View Mode Toggle */}
               <div className="flex bg-gray-200 dark:bg-neutral-700 rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('kanban')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
-                    viewMode === 'kanban' 
-                      ? 'bg-white dark:bg-neutral-600 text-gray-800 dark:text-gray-200 shadow' 
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${viewMode === 'kanban'
+                      ? 'bg-white dark:bg-neutral-600 text-gray-800 dark:text-gray-200 shadow'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300'
-                  }`}
+                    }`}
                 >
                   <Grid className="h-4 w-4" />
                   Kanban
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
-                    viewMode === 'list' 
-                      ? 'bg-white dark:bg-neutral-600 text-gray-800 dark:text-gray-200 shadow' 
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${viewMode === 'list'
+                      ? 'bg-white dark:bg-neutral-600 text-gray-800 dark:text-gray-200 shadow'
                       : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300'
-                  }`}
+                    }`}
                 >
                   <List className="h-4 w-4" />
                   Жагсаалт
@@ -1440,7 +1438,7 @@ export default function TaskManagementPage() {
 
       {/* Main Content */}
       {viewMode === 'kanban' ? (
-        <KanbanBoard 
+        <KanbanBoard
           columnTasks={columnTasks}
           activeTask={activeTask}
           sensors={sensors}
@@ -1449,7 +1447,7 @@ export default function TaskManagementPage() {
         />
       ) : (
         <div className="p-6">
-          <TaskListScreen 
+          <TaskListScreen
             tasks={getFilteredTasks(tasks)}
             supervisors={supervisors}
             onAssignSupervisor={assignSupervisor}

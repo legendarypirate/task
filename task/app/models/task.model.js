@@ -42,7 +42,7 @@ module.exports = (sequelize, Sequelize) => {
       type: Sequelize.DATE,
       allowNull: true,
     },
-    
+
     // Давтамжтай ажилд зориулсан 2 шинэ column
     frequency_type: {
       type: Sequelize.ENUM("none", "daily", "weekly", "monthly"),
