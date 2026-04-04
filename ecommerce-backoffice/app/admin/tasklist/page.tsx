@@ -159,6 +159,16 @@ function EditTaskModal({
 
   useEffect(() => {
     if (task) {
+      const rawSup = task.supervisor_id;
+      const supervisorIds: number[] =
+        rawSup === undefined || rawSup === null
+          ? []
+          : Array.isArray(rawSup)
+            ? rawSup.map((n) => Number(n)).filter((n) => Number.isFinite(n))
+            : Number.isFinite(Number(rawSup))
+              ? [Number(rawSup)]
+              : [];
+
       setFormData({
         title: task.title,
         description: task.description || "",
@@ -167,8 +177,8 @@ function EditTaskModal({
         assigned_to: task.assigned_to
           ? (Array.isArray(task.assigned_to) ? task.assigned_to : [task.assigned_to])
           : [],
-        supervisor_id: task.supervisor_id,
-        due_date: task.due_date ? task.due_date.split('T')[0] : "",
+        supervisor_id: supervisorIds,
+        due_date: task.due_date ? String(task.due_date).split("T")[0] : "",
       });
     }
   }, [task]);
@@ -361,8 +371,19 @@ function EditTaskModal({
                   Supervisor
                 </label>
                 <select
-                  value={formData.supervisor_id || ""}
-                  onChange={(e) => setFormData({ ...formData, supervisor_id: e.target.value ? parseInt(e.target.value) : undefined })}
+                  value={(() => {
+                    const sid = formData.supervisor_id;
+                    if (sid === undefined || sid === null) return "";
+                    if (Array.isArray(sid)) return sid.length ? String(sid[0]) : "";
+                    return String(sid);
+                  })()}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setFormData({
+                      ...formData,
+                      supervisor_id: v ? [parseInt(v, 10)] : [],
+                    });
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
                 >
                   <option value="">Сонгох</option>
