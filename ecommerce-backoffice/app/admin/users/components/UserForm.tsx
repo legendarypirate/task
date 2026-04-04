@@ -1,6 +1,6 @@
 // app/users/components/UserForm.tsx
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { User } from "../types/user";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,27 +29,45 @@ export default function UserForm({
   loading,
   supervisors = []
 }: UserFormProps) {
-  const [formData, setFormData] = useState({
-    full_name: user?.full_name || "",
-    phone: user?.phone || "",
-    password: "",
-    role: user?.role || "worker",
-    supervisor_id: user?.supervisor_id 
-      ? (Array.isArray(user.supervisor_id) ? user.supervisor_id : [user.supervisor_id]) 
-      : [] as number[],
-    is_active: user?.is_active ?? true,
-  });
+  function initialState() {
+    const sup = user?.supervisor_id;
+    const supervisorList: number[] =
+      sup === undefined || sup === null
+        ? []
+        : Array.isArray(sup)
+          ? sup.map((n) => Number(n)).filter((n) => Number.isFinite(n))
+          : Number.isFinite(Number(sup))
+            ? [Number(sup)]
+            : [];
+    return {
+      full_name: user?.full_name || "",
+      phone: user?.phone || "",
+      password: "",
+      role: user?.role || "worker",
+      supervisor_id: supervisorList,
+      is_active: user?.is_active ?? true,
+    };
+  }
+
+  const [formData, setFormData] = useState(initialState);
+
+  useEffect(() => {
+    setFormData(initialState());
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset form when editing user / new user changes
+  }, [user?.id]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Remove password field if empty during edit
-    const submitData = { ...formData };
+
+    const submitData = {
+      ...formData,
+      supervisor_id: [...formData.supervisor_id],
+    };
     if (user && !submitData.password) {
-      delete (submitData as any).password;
+      delete (submitData as { password?: string }).password;
     }
-    
-    onSubmit(submitData);
+
+    onSubmit(submitData as Omit<User, "id">);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -145,12 +163,15 @@ export default function UserForm({
                 type="checkbox"
                 checked={Array.isArray(formData.supervisor_id) && formData.supervisor_id.includes(supervisor.id)}
                 onChange={(e) => {
-                  const current = Array.isArray(formData.supervisor_id) ? formData.supervisor_id : [];
-                  if (e.target.checked) {
-                    setFormData({ ...formData, supervisor_id: [...current, supervisor.id] });
-                  } else {
-                    setFormData({ ...formData, supervisor_id: current.filter(id => id !== supervisor.id) });
-                  }
+                  setFormData((prev) => {
+                    const current = prev.supervisor_id;
+                    const next = e.target.checked
+                      ? current.includes(supervisor.id)
+                        ? current
+                        : [...current, supervisor.id]
+                      : current.filter((id) => id !== supervisor.id);
+                    return { ...prev, supervisor_id: next };
+                  });
                 }}
                 className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 disabled={loading}
@@ -165,7 +186,8 @@ export default function UserForm({
           )}
         </div>
         <p className="text-sm text-gray-500">
-          Check one or more supervisors for this user
+          Choose who supervises this user ({formData.supervisor_id.length} selected). Director, general
+          manager, and supervisor accounts appear here.
         </p>
       </div>
 

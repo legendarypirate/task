@@ -41,18 +41,34 @@ export default function UsersPage() {
     fetchUsers();
   }, []);
 
+  function normalizeSupervisorIds(
+    raw: User["supervisor_id"] | undefined,
+  ): number[] {
+    if (raw === undefined || raw === null) return [];
+    const list = Array.isArray(raw) ? raw : [raw];
+    return [...new Set(list.map((n) => Number(n)).filter((n) => Number.isFinite(n)))];
+  }
+
   // Register new user
   const handleAdd = async (userData: Omit<User, "id">) => {
     setFormLoading(true);
     try {
       const token = localStorage.getItem("token");
+      const payload = {
+        phone: userData.phone,
+        password: userData.password,
+        full_name: userData.full_name,
+        role: userData.role,
+        is_active: userData.is_active,
+        supervisor_id: normalizeSupervisorIds(userData.supervisor_id),
+      };
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(userData),
+        body: JSON.stringify(payload),
       });
 
       const result = await response.json();
@@ -79,13 +95,23 @@ export default function UsersPage() {
     setFormLoading(true);
     try {
       const token = localStorage.getItem("token");
+      const payload: Record<string, unknown> = {
+        full_name: userData.full_name,
+        phone: userData.phone,
+        role: userData.role,
+        is_active: userData.is_active,
+        supervisor_id: normalizeSupervisorIds(userData.supervisor_id),
+      };
+      if (userData.password?.trim()) {
+        payload.password = userData.password;
+      }
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/${editingUser.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(userData),
+        body: JSON.stringify(payload),
       });
 
       const result = await response.json();
@@ -164,16 +190,17 @@ export default function UsersPage() {
     setEditingUser(null);
   };
 
-  // Get potential supervisors (only users with role "supervisor")
+  // Users who can be assigned as a worker's supervisor (org chain)
   const getPotentialSupervisors = () => {
-    return users.filter(user => {
-      // When editing, exclude the current user from supervisor options
-      if (editingUser && user.id === editingUser.id) return false;
-      // Only include active users
-      if (!user.is_active) return false;
-      // Only include users with role "supervisor"
-      if (user.role !== "supervisor") return false;
-      return true;
+    const assignableRoles = new Set([
+      "supervisor",
+      "general_manager",
+      "director",
+    ]);
+    return users.filter((u) => {
+      if (editingUser && u.id === editingUser.id) return false;
+      if (!u.is_active) return false;
+      return assignableRoles.has(u.role);
     });
   };
 

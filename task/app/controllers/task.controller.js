@@ -21,6 +21,17 @@ function toNullableIntArray(value) {
   return Number.isFinite(n) ? [n] : null;
 }
 
+/** Merge multiple body fields (e.g. supervisor_id + supervisor_ids) into one deduped int[] or null. */
+function mergeBodyIntArrays(body, keys) {
+  const merged = [];
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(body, key)) continue;
+    const arr = toNullableIntArray(body[key]);
+    if (arr) for (const n of arr) if (!merged.includes(n)) merged.push(n);
+  }
+  return merged.length ? merged : null;
+}
+
 function toNullableDate(value) {
   if (value === undefined || value === null || value === "") return null;
   const d = new Date(value);
@@ -29,15 +40,22 @@ function toNullableDate(value) {
 // ---------------------- CREATE ----------------------
 exports.create = async (req, res) => {
   try {
-    const { title, description, created_by, assigned_to, supervisor_id, priority, status, image, due_date, frequency_type, frequency_value } = req.body;
+    const { title, description, created_by, priority, status, image, due_date, frequency_type, frequency_value } = req.body;
 
     if (!title) {
       return res.status(400).send({ success: false, message: "Гарчиг оруулна уу" });
     }
 
     const normalizedFrequencyType = frequency_type || "none";
-    const normalizedAssignedTo = toNullableIntArray(assigned_to);
-    const normalizedSupervisorId = toNullableIntArray(supervisor_id);
+    const normalizedAssignedTo = mergeBodyIntArrays(req.body, [
+      "assigned_to",
+      "assigned_to_ids",
+      "assignee_ids",
+    ]);
+    const normalizedSupervisorId = mergeBodyIntArrays(req.body, [
+      "supervisor_id",
+      "supervisor_ids",
+    ]);
     const normalizedDueDate =
       normalizedFrequencyType === "none" ? toNullableDate(due_date) : null;
     const normalizedFrequencyValue =
@@ -97,12 +115,17 @@ exports.update = async (req, res) => {
   try {
     const id = req.params.id;
     const payload = { ...req.body };
-    if (Object.prototype.hasOwnProperty.call(payload, "assigned_to")) {
-      payload.assigned_to = toNullableIntArray(payload.assigned_to);
+    const assignKeys = ["assigned_to", "assigned_to_ids", "assignee_ids"];
+    const supervisorKeys = ["supervisor_id", "supervisor_ids"];
+    if (assignKeys.some((k) => Object.prototype.hasOwnProperty.call(payload, k))) {
+      payload.assigned_to = mergeBodyIntArrays(payload, assignKeys);
     }
-    if (Object.prototype.hasOwnProperty.call(payload, "supervisor_id")) {
-      payload.supervisor_id = toNullableIntArray(payload.supervisor_id);
+    if (supervisorKeys.some((k) => Object.prototype.hasOwnProperty.call(payload, k))) {
+      payload.supervisor_id = mergeBodyIntArrays(payload, supervisorKeys);
     }
+    delete payload.assigned_to_ids;
+    delete payload.assignee_ids;
+    delete payload.supervisor_ids;
     if (Object.prototype.hasOwnProperty.call(payload, "due_date")) {
       payload.due_date = toNullableDate(payload.due_date);
     }

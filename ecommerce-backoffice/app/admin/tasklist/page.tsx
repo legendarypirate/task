@@ -520,6 +520,9 @@ function CreateTaskDrawer({
     title: "",
     description: "",
     priority: "normal" as "low" | "normal" | "high",
+    status: "pending" as (typeof columns)[number],
+    frequency_type: "none" as NonNullable<CardTask["frequency_type"]>,
+    frequency_value: 1,
     assigned_to: [] as number[],
     supervisor_id: "",
     due_date: "",
@@ -528,15 +531,28 @@ function CreateTaskDrawer({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const newTask: Omit<Task, 'id'> = {
+    if (formData.frequency_type === "none" && !formData.due_date.trim()) {
+      alert("Нэг удаагийн ажилд дуусах огноо оруулна уу");
+      return;
+    }
+
+    const assignees = [...new Set(formData.assigned_to)];
+
+    const newTask: Omit<Task, "id"> = {
       title: formData.title,
       description: formData.description || undefined,
       priority: formData.priority,
-      status: "pending",
-      created_by: 1, // This should be the logged-in user's ID
-      assigned_to: formData.assigned_to,
-      supervisor_id: formData.supervisor_id ? parseInt(formData.supervisor_id) : undefined,
-      due_date: formData.due_date || undefined,
+      status: formData.status,
+      created_by: 1,
+      assigned_to: assignees.length ? assignees : undefined,
+      supervisor_id: assignees.length ? assignees : undefined,
+      due_date:
+        formData.frequency_type === "none" && formData.due_date
+          ? new Date(`${formData.due_date}T12:00:00`).toISOString()
+          : null,
+      frequency_type: formData.frequency_type,
+      frequency_value:
+        formData.frequency_type === "none" ? null : formData.frequency_value,
     };
 
     onCreate(newTask);
@@ -544,6 +560,9 @@ function CreateTaskDrawer({
       title: "",
       description: "",
       priority: "normal",
+      status: "pending",
+      frequency_type: "none",
+      frequency_value: 1,
       assigned_to: [],
       supervisor_id: "",
       due_date: "",
@@ -603,20 +622,107 @@ function CreateTaskDrawer({
             />
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Чухалчлал
+              </label>
+              <select
+                value={formData.priority}
+                onChange={(e) =>
+                  setFormData({ ...formData, priority: e.target.value as "low" | "normal" | "high" })
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
+              >
+                <option value="low">Бага</option>
+                <option value="normal">Хэвийн</option>
+                <option value="high">Өндөр</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Статус
+              </label>
+              <select
+                value={formData.status}
+                onChange={(e) =>
+                  setFormData({ ...formData, status: e.target.value as (typeof columns)[number] })
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
+              >
+                {columns.map((c) => (
+                  <option key={c} value={c}>
+                    {STATUS_LABELS[c]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Ангилал
+              Давтамж
             </label>
             <select
-              value={formData.priority}
-              onChange={(e) => setFormData({ ...formData, priority: e.target.value as "low" | "normal" | "high" })}
+              value={formData.frequency_type}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  frequency_type: e.target.value as NonNullable<CardTask["frequency_type"]>,
+                })
+              }
               className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
             >
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
+              <option value="none">Нэг удаа</option>
+              <option value="daily">Өдөр бүр</option>
+              <option value="weekly">Долоо хоног бүр</option>
+              <option value="monthly">Сар бүр</option>
             </select>
           </div>
+
+          {formData.frequency_type === "weekly" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Гариг *
+              </label>
+              <select
+                value={formData.frequency_value.toString()}
+                onChange={(e) =>
+                  setFormData({ ...formData, frequency_value: parseInt(e.target.value, 10) })
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
+              >
+                <option value="0">Ням</option>
+                <option value="1">Даваа</option>
+                <option value="2">Мягмар</option>
+                <option value="3">Лхагва</option>
+                <option value="4">Пүрэв</option>
+                <option value="5">Баасан</option>
+                <option value="6">Бямба</option>
+              </select>
+            </div>
+          )}
+
+          {formData.frequency_type === "monthly" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Сарын өдөр (1–31) *
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={31}
+                value={formData.frequency_value}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    frequency_value: parseInt(e.target.value, 10) || 1,
+                  })
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -624,16 +730,23 @@ function CreateTaskDrawer({
             </label>
             <div className="space-y-2 max-h-40 overflow-y-auto p-2 border border-gray-300 dark:border-neutral-600 rounded-md bg-white dark:bg-neutral-700">
               {supervisors.map((supervisor) => (
-                <label key={supervisor.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-600 p-1 rounded transition-colors">
+                <label
+                  key={supervisor.id}
+                  className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-600 p-1 rounded transition-colors"
+                >
                   <input
                     type="checkbox"
                     checked={formData.assigned_to.includes(supervisor.id)}
                     onChange={(e) => {
-                      if (e.target.checked) {
-                        setFormData({ ...formData, assigned_to: [...formData.assigned_to, supervisor.id] });
-                      } else {
-                        setFormData({ ...formData, assigned_to: formData.assigned_to.filter(id => id !== supervisor.id) });
-                      }
+                      setFormData((prev) => {
+                        const id = supervisor.id;
+                        const next = e.target.checked
+                          ? prev.assigned_to.includes(id)
+                            ? prev.assigned_to
+                            : [...prev.assigned_to, id]
+                          : prev.assigned_to.filter((x) => x !== id);
+                        return { ...prev, assigned_to: next };
+                      });
                     }}
                     className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
@@ -648,17 +761,20 @@ function CreateTaskDrawer({
             </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Дуусах хугацаа
-            </label>
-            <input
-              type="date"
-              value={formData.due_date}
-              onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
-            />
-          </div>
+          {formData.frequency_type === "none" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Дуусах огноо *
+              </label>
+              <input
+                type="date"
+                required={formData.frequency_type === "none"}
+                value={formData.due_date}
+                onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
+              />
+            </div>
+          )}
 
           <div className="flex gap-3 pt-6">
             <button

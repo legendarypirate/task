@@ -22,8 +22,64 @@ interface Task {
   priority: "low" | "normal" | "high";
   frequency_type: "none" | "daily" | "weekly" | "monthly";
   frequency_value?: number;
-  assigned_to?: number;
-  supervisor_id?: number;
+  assigned_to?: number | number[];
+  supervisor_id?: number | number[];
+}
+
+function idsFromTaskField(value: number | number[] | undefined | null): string[] {
+  if (value === undefined || value === null) return [];
+  if (Array.isArray(value)) return value.map((n) => String(n));
+  return [String(value)];
+}
+
+function parseIdList(ids: string[]): number[] {
+  return ids.map((id) => parseInt(id, 10)).filter((n) => Number.isFinite(n));
+}
+
+function mergeUniqueInts(...lists: number[][]): number[] {
+  const out: number[] = [];
+  for (const list of lists) {
+    for (const n of list) {
+      if (!out.includes(n)) out.push(n);
+    }
+  }
+  return out;
+}
+
+function buildTaskApiJsonBody(
+  formData: TaskFormData,
+  assignedSupervisorIds: string[],
+): Record<string, unknown> {
+  const assignedParsed =
+    assignedSupervisorIds.length > 0
+      ? parseIdList(assignedSupervisorIds)
+      : formData.assigned_to
+        ? parseIdList([formData.assigned_to])
+        : [];
+  const assignedToPayloadFinal = assignedParsed.length > 0 ? assignedParsed : null;
+
+  const reviewerParsed =
+    formData.supervisor_ids.length > 0
+      ? parseIdList(formData.supervisor_ids)
+      : formData.supervisor_id
+        ? parseIdList([formData.supervisor_id])
+        : [];
+
+  // supervisor_id on API = удирдлага/хяналт: гүйцэтгэгч supervisor-ууд + нэмэлт GM/Director сонголт
+  const supervisorMerged = mergeUniqueInts(assignedParsed, reviewerParsed);
+  const supervisorPayload = supervisorMerged.length > 0 ? supervisorMerged : null;
+
+  return {
+    title: formData.title,
+    description: formData.description,
+    priority: formData.priority,
+    status: formData.status,
+    frequency_type: formData.frequency_type,
+    frequency_value: formData.frequency_type === "none" ? null : formData.frequency_value,
+    due_date: formData.frequency_type === "none" ? formData.due_date || null : null,
+    assigned_to: assignedToPayloadFinal,
+    supervisor_id: supervisorPayload,
+  };
 }
 
 interface TaskFormData {
@@ -97,6 +153,8 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
 
   useEffect(() => {
     if (task) {
+      const supIds = idsFromTaskField(task.supervisor_id);
+      const assignIds = idsFromTaskField(task.assigned_to);
       setFormData({
         title: task.title,
         description: task.description || "",
@@ -105,11 +163,11 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
         status: task.status,
         frequency_type: task.frequency_type,
         frequency_value: task.frequency_value || 1,
-        assigned_to: task.assigned_to?.toString() || "",
-        supervisor_id: task.supervisor_id?.toString() || "",
-        supervisor_ids: task.supervisor_id ? [task.supervisor_id.toString()] : [],
+        assigned_to: assignIds[0] || "",
+        supervisor_id: supIds[0] || "",
+        supervisor_ids: supIds,
       });
-      setAssignedSupervisorIds(task.assigned_to ? [task.assigned_to.toString()] : []);
+      setAssignedSupervisorIds(assignIds);
     }
   }, [task]);
 
@@ -127,9 +185,7 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
         ...formData,
         frequency_value: formData.frequency_type === "none" ? 1 : formData.frequency_value,
         due_date: formData.frequency_type === "none" ? formData.due_date : "",
-        // Backend currently supports single assigned_to; keep first selected supervisor.
         assigned_to: assignedSupervisorIds[0] || formData.assigned_to || "",
-        // Backend currently supports single supervisor_id; keep first selected.
         supervisor_id: formData.supervisor_ids[0] || formData.supervisor_id || "",
         supervisor_ids: formData.supervisor_ids,
       };
@@ -152,19 +208,9 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          ...formData,
-          frequency_value: formData.frequency_type === "none" ? null : formData.frequency_value,
-          due_date: formData.frequency_type === "none" ? formData.due_date : null,
-          // Backend currently supports single assigned_to; keep first selected supervisor.
-          assigned_to: (assignedSupervisorIds[0] || formData.assigned_to)
-            ? parseInt(assignedSupervisorIds[0] || formData.assigned_to)
-            : null,
-          // Backend currently supports single supervisor_id; keep first selected.
-          supervisor_id: (formData.supervisor_ids[0] || formData.supervisor_id)
-            ? parseInt(formData.supervisor_ids[0] || formData.supervisor_id)
-            : null,
-        }),
+        body: JSON.stringify(
+          buildTaskApiJsonBody(formData, assignedSupervisorIds),
+        ),
       });
 
       const result = await response.json();
@@ -269,13 +315,17 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
         </div>
 
         <div>
-          <Label>Хэрэгжүүлэгч (Supervisor)</Label>
+          <Label>Гүйцэтгэгчид (supervisor эрхтэй)</Label>
+          <p className="text-xs text-muted-foreground mt-1">
+            Сонгогдсон supervisor-ууд ажлыг гүйцэтгэнэ (<code className="text-[11px]">assigned_to</code>) мөн{" "}
+            <code className="text-[11px]">supervisor_id</code> жагсаалтад орно.
+          </p>
           <div className="mt-2 max-h-48 overflow-auto rounded-md border p-3 space-y-2">
             {assignableSupervisors.length === 0 && (
               <p className="text-sm text-gray-500">Supervisor хэрэглэгч олдсонгүй</p>
             )}
             {assignableSupervisors.map((supervisor) => {
-              const id = supervisor.id.toString();
+              const id = String(supervisor.id);
               const checked = assignedSupervisorIds.includes(id);
               return (
                 <label key={id} className="flex items-center gap-2 text-sm">
@@ -283,14 +333,13 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
                     type="checkbox"
                     checked={checked}
                     onChange={(e) => {
-                      const nextIds = e.target.checked
-                        ? [...assignedSupervisorIds, id]
-                        : assignedSupervisorIds.filter((x) => x !== id);
-                      setAssignedSupervisorIds(nextIds);
-                      setFormData({
-                        ...formData,
-                        assigned_to: nextIds[0] || "",
-                      });
+                      setAssignedSupervisorIds((prev) =>
+                        e.target.checked
+                          ? prev.includes(id)
+                            ? prev
+                            : [...prev, id]
+                          : prev.filter((x) => x !== id),
+                      );
                     }}
                   />
                   <span>
@@ -301,9 +350,6 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
               );
             })}
           </div>
-          <p className="mt-2 text-xs text-gray-500">
-            Тэмдэглэл: одоогийн backend нэг л assigned_to хадгалдаг (эхний сонголт).
-          </p>
         </div>
       </div>
 
@@ -360,15 +406,19 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
       )}
 
       <div>
-        <Label>Хянах хүмүүс (General manager / Director)</Label>
+        <Label>Нэмэлт хянагчид (General manager / Director)</Label>
+        <p className="text-xs text-muted-foreground mt-1">
+          Дээрхээс гадна батлах/хянах ерөнхий менежер, захирал нэмж сонгоно. ID-ууд{" "}
+          <code className="text-[11px]">supervisor_id</code>-д нэгтгэгдэнэ.
+        </p>
         <div className="mt-2 max-h-48 overflow-auto rounded-md border p-3 space-y-2">
           {reviewManagers.length === 0 && (
             <p className="text-sm text-gray-500">
-              General manager эсвэл director хэрэглэгч олдсонгүй
+              General manager эсвэл director хэрэглэгч олдсонгүй — энэ талбар хоосон үлдэнэ
             </p>
           )}
           {reviewManagers.map((manager) => {
-            const id = manager.id.toString();
+            const id = String(manager.id);
             const checked = formData.supervisor_ids.includes(id);
             return (
               <label key={id} className="flex items-center gap-2 text-sm">
@@ -376,13 +426,17 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
                   type="checkbox"
                   checked={checked}
                   onChange={(e) => {
-                    const nextIds = e.target.checked
-                      ? [...formData.supervisor_ids, id]
-                      : formData.supervisor_ids.filter((x) => x !== id);
-                    setFormData({
-                      ...formData,
-                      supervisor_ids: nextIds,
-                      supervisor_id: nextIds[0] || "",
+                    setFormData((prev) => {
+                      const nextIds = e.target.checked
+                        ? prev.supervisor_ids.includes(id)
+                          ? prev.supervisor_ids
+                          : [...prev.supervisor_ids, id]
+                        : prev.supervisor_ids.filter((x) => x !== id);
+                      return {
+                        ...prev,
+                        supervisor_ids: nextIds,
+                        supervisor_id: nextIds[0] || "",
+                      };
                     });
                   }}
                 />
@@ -394,9 +448,6 @@ export default function TaskForm({ task, onSuccess, onCancel, loading = false, o
             );
           })}
         </div>
-        <p className="mt-2 text-xs text-gray-500">
-          Тэмдэглэл: одоогийн backend нэг л supervisor хадгалдаг (эхний сонголт).
-        </p>
       </div>
 
       <div className="flex justify-end space-x-3 pt-4">

@@ -29,9 +29,11 @@ interface Task {
   status: string;
   priority: string;
   created_by: number;
-  assigned_to?: number;
-  supervisor_id?: number;
-  due_date?: string;
+  assigned_to?: number | number[];
+  supervisor_id?: number | number[];
+  due_date?: string | null;
+  frequency_type?: "none" | "daily" | "weekly" | "monthly";
+  frequency_value?: number | null;
 }
 
 // User interface for supervisors
@@ -101,6 +103,9 @@ function CreateTaskDrawer({
     title: "",
     description: "",
     priority: "normal" as "low" | "normal" | "high",
+    status: "pending" as Task["status"],
+    frequency_type: "none" as NonNullable<Task["frequency_type"]>,
+    frequency_value: 1,
     assigned_to: "",
     supervisor_id: "",
     due_date: "",
@@ -108,16 +113,30 @@ function CreateTaskDrawer({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const newTask: Omit<Task, 'id'> = {
+
+    if (formData.frequency_type === "none" && !formData.due_date.trim()) {
+      alert("Нэг удаагийн ажилд дуусах огноо оруулна уу");
+      return;
+    }
+
+    const assignId = formData.assigned_to ? parseInt(formData.assigned_to, 10) : NaN;
+    const assignList = Number.isFinite(assignId) ? [assignId] : [];
+
+    const newTask: Omit<Task, "id"> = {
       title: formData.title,
       description: formData.description || undefined,
       priority: formData.priority,
-      status: "pending",
-      created_by: 1, // This should be the logged-in user's ID
-      assigned_to: formData.assigned_to ? parseInt(formData.assigned_to) : undefined,
-      supervisor_id: formData.supervisor_id ? parseInt(formData.supervisor_id) : undefined,
-      due_date: formData.due_date || undefined,
+      status: formData.status,
+      created_by: 1,
+      assigned_to: assignList.length ? assignList : undefined,
+      supervisor_id: assignList.length ? assignList : undefined,
+      due_date:
+        formData.frequency_type === "none" && formData.due_date
+          ? new Date(`${formData.due_date}T12:00:00`).toISOString()
+          : null,
+      frequency_type: formData.frequency_type,
+      frequency_value:
+        formData.frequency_type === "none" ? null : formData.frequency_value,
     };
 
     onCreate(newTask);
@@ -125,6 +144,9 @@ function CreateTaskDrawer({
       title: "",
       description: "",
       priority: "normal",
+      status: "pending",
+      frequency_type: "none",
+      frequency_value: 1,
       assigned_to: "",
       supervisor_id: "",
       due_date: "",
@@ -184,20 +206,105 @@ function CreateTaskDrawer({
             />
           </div>
 
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Чухалчлал
+              </label>
+              <select
+                value={formData.priority}
+                onChange={(e) =>
+                  setFormData({ ...formData, priority: e.target.value as "low" | "normal" | "high" })
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
+              >
+                <option value="low">Бага</option>
+                <option value="normal">Хэвийн</option>
+                <option value="high">Өндөр</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Статус
+              </label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
+              >
+                <option value="pending">Хүлээгдэж байна</option>
+                <option value="in_progress">Хийгдэж байна</option>
+                <option value="done">Дууссан</option>
+                <option value="verified">Баталгаажсан</option>
+                <option value="cancelled">Цуцлагдсан</option>
+              </select>
+            </div>
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Ангилал
+              Давтамж
             </label>
             <select
-              value={formData.priority}
-              onChange={(e) => setFormData({ ...formData, priority: e.target.value as "low" | "normal" | "high" })}
+              value={formData.frequency_type}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  frequency_type: e.target.value as NonNullable<Task["frequency_type"]>,
+                })
+              }
               className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
             >
-              <option value="low">Low</option>
-              <option value="normal">Normal</option>
-              <option value="high">High</option>
+              <option value="none">Нэг удаа</option>
+              <option value="daily">Өдөр бүр</option>
+              <option value="weekly">Долоо хоног бүр</option>
+              <option value="monthly">Сар бүр</option>
             </select>
           </div>
+
+          {formData.frequency_type === "weekly" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Гариг *
+              </label>
+              <select
+                value={formData.frequency_value.toString()}
+                onChange={(e) =>
+                  setFormData({ ...formData, frequency_value: parseInt(e.target.value, 10) })
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
+              >
+                <option value="0">Ням</option>
+                <option value="1">Даваа</option>
+                <option value="2">Мягмар</option>
+                <option value="3">Лхагва</option>
+                <option value="4">Пүрэв</option>
+                <option value="5">Баасан</option>
+                <option value="6">Бямба</option>
+              </select>
+            </div>
+          )}
+
+          {formData.frequency_type === "monthly" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Сарын өдөр (1–31) *
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={31}
+                value={formData.frequency_value}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    frequency_value: parseInt(e.target.value, 10) || 1,
+                  })
+                }
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -220,17 +327,20 @@ function CreateTaskDrawer({
             </p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Дуусах хугацаа
-            </label>
-            <input
-              type="date"
-              value={formData.due_date}
-              onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
-            />
-          </div>
+          {formData.frequency_type === "none" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Дуусах огноо *
+              </label>
+              <input
+                type="date"
+                required={formData.frequency_type === "none"}
+                value={formData.due_date}
+                onChange={(e) => setFormData({ ...formData, due_date: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-neutral-700 dark:text-white"
+              />
+            </div>
+          )}
 
           <div className="flex gap-3 pt-6">
             <button

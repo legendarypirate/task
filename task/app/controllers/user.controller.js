@@ -4,6 +4,25 @@ const Op = db.Sequelize.Op;
 const bcrypt = require('bcryptjs');
 const saltRounds = 10; // Number of salt rounds for bcrypt
 
+function normalizeSupervisorIdArray(body) {
+  const keys = ["supervisor_id", "supervisor_ids"];
+  if (!keys.some((k) => Object.prototype.hasOwnProperty.call(body, k))) {
+    return undefined;
+  }
+  const merged = [];
+  for (const k of keys) {
+    if (!Object.prototype.hasOwnProperty.call(body, k)) continue;
+    const v = body[k];
+    if (v === undefined || v === null || v === "") continue;
+    const raw = Array.isArray(v) ? v : [v];
+    for (const x of raw) {
+      const n = Number(x);
+      if (Number.isFinite(n) && !merged.includes(n)) merged.push(n);
+    }
+  }
+  return merged;
+}
+
 // Create and Save a new User
 exports.create = async (req, res) => {
   // Log request origin/IP (super useful for CORS debugging)
@@ -128,18 +147,21 @@ exports.findOne = (req, res) => {
 exports.update = async (req, res) => {
   const id = req.params.id;
 
-  // Prepare the data for updating - include ALL fields
+  const normalizedSupervisors = normalizeSupervisorIdArray(req.body);
+
   const updateData = {
     full_name: req.body.full_name,
     phone: req.body.phone,
     role: req.body.role,
-    supervisor_id: req.body.supervisor_id !== undefined ? req.body.supervisor_id : null,
     end_date: req.body.end_date ? req.body.end_date : null,
     is_active: req.body.is_active !== undefined ? req.body.is_active : true
   };
 
-  // Remove undefined fields
-  Object.keys(updateData).forEach(key => {
+  if (normalizedSupervisors !== undefined) {
+    updateData.supervisor_id = normalizedSupervisors.length > 0 ? normalizedSupervisors : [];
+  }
+
+  Object.keys(updateData).forEach((key) => {
     if (updateData[key] === undefined) {
       delete updateData[key];
     }

@@ -5,12 +5,18 @@ const jwt = require("jsonwebtoken");
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-fallback-secret-key";
 
+function normalizeIntIdList(value) {
+  if (value === undefined || value === null || value === "") return [];
+  const raw = Array.isArray(value) ? value : [value];
+  return [...new Set(raw.map((v) => Number(v)).filter((n) => Number.isFinite(n)))];
+}
+
 // ====================
 // REGISTER
 // ====================
 exports.register = async (req, res) => {
   try {
-    const { phone, password, full_name, role } = req.body;
+    const { phone, password, full_name, role, supervisor_id, supervisor_ids, is_active } = req.body;
 
     if (!phone || !password || !full_name) {
       return res.status(400).json({ message: "Бүх талбаруудыг бөглөнө үү" });
@@ -38,11 +44,19 @@ exports.register = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    const supervisorIdList = [
+      ...normalizeIntIdList(supervisor_id),
+      ...normalizeIntIdList(supervisor_ids),
+    ];
+    const uniqueSupervisorIds = [...new Set(supervisorIdList)];
+
     const user = await User.create({
       phone,
       password: hashedPassword,
       full_name,
       role: userRole,
+      supervisor_id: uniqueSupervisorIds.length > 0 ? uniqueSupervisorIds : [],
+      ...(typeof is_active === "boolean" ? { is_active } : {}),
     });
 
     // Remove password from response

@@ -11,8 +11,10 @@ export interface Task {
   priority: string;
   created_by: number;
   assigned_to?: number | number[];
-  supervisor_id?: number;
-  due_date?: string;
+  supervisor_id?: number | number[];
+  due_date?: string | null;
+  frequency_type?: "none" | "daily" | "weekly" | "monthly";
+  frequency_value?: number | null;
 }
 
 interface TaskCardProps {
