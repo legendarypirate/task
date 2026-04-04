@@ -862,10 +862,17 @@ function TaskListScreen({
     }
   };
 
-  const getSupervisorName = (supervisorId?: number) => {
-    if (!supervisorId) return 'Томилогдоогүй';
-    const supervisor = supervisors.find(s => s.id === supervisorId);
-    return supervisor ? supervisor.full_name : 'Томилогдоогүй';
+  const getSupervisorName = (supervisorId?: number | number[]) => {
+    if (supervisorId === undefined || supervisorId === null) return "Томилогдоогүй";
+    const ids = Array.isArray(supervisorId) ? supervisorId : [supervisorId];
+    if (ids.length === 0) return "Томилогдоогүй";
+
+    return ids
+      .map((id) => {
+        const supervisor = supervisors.find((s) => s.id === id);
+        return supervisor ? supervisor.full_name : `ID: ${id}`;
+      })
+      .join(", ");
   };
 
   const getAssigneeNames = (assignedTo?: number | number[]) => {
