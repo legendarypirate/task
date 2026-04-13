@@ -62,6 +62,26 @@ function isVerifiedFromPriorMonth(task: Task): boolean {
   );
 }
 
+/** API uses integer[] for supervisor_id; match a single supervisor id for filtering. */
+function parseIdListField(value: unknown): number[] {
+  if (value === undefined || value === null) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((n) => Number(n))
+      .filter((n) => Number.isFinite(n));
+  }
+  const n = Number(value);
+  return Number.isFinite(n) ? [n] : [];
+}
+
+function taskMatchesSupervisorFilter(task: Task, supervisorId: number): boolean {
+  if (parseIdListField(task.supervisor_id).includes(supervisorId)) return true;
+  const assigned = task.assigned_to;
+  if (Array.isArray(assigned) && assigned.includes(supervisorId)) return true;
+  if (!Array.isArray(assigned) && Number(assigned) === supervisorId) return true;
+  return false;
+}
+
 // User interface for supervisors
 interface User {
   id: number;
@@ -1196,14 +1216,11 @@ export default function TaskManagementPage() {
           return false;
         }
       }
-      if (supervisorFilter !== "all") {
+      if (supervisorFilter !== "all" && supervisorFilter.trim() !== "") {
         const sid = Number(supervisorFilter);
-        const matchesSupervisorField = task.supervisor_id === sid;
-        // Some flows assign the supervisor as assignee (assigned_to).
-        const matchesAssignedSupervisor = Array.isArray(task.assigned_to)
-          ? task.assigned_to.includes(sid)
-          : task.assigned_to === sid;
-        if (!matchesSupervisorField && !matchesAssignedSupervisor) return false;
+        if (Number.isFinite(sid) && !taskMatchesSupervisorFilter(task, sid)) {
+          return false;
+        }
       }
       return true;
     });
