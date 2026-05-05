@@ -82,6 +82,13 @@ function taskMatchesSupervisorFilter(task: Task, supervisorId: number): boolean 
   return false;
 }
 
+/** Давтамжит загвар (daily/weekly/monthly) — нэг удаагийн жагсаалтаас тусад нь. */
+function isRecurringScheduleTask(task: Task): boolean {
+  const ft = task.frequency_type;
+  const fv = task.frequency_value;
+  return !!(ft && ft !== "none" && fv != null);
+}
+
 // User interface for supervisors
 interface User {
   id: number;
@@ -1189,6 +1196,7 @@ export default function TaskManagementPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [workerFilter, setWorkerFilter] = useState<string>("all");
   const [supervisorFilter, setSupervisorFilter] = useState<string>("all");
+  const [taskScope, setTaskScope] = useState<"all" | "one_time" | "recurring">("all");
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1205,6 +1213,8 @@ export default function TaskManagementPage() {
 
   const getFilteredTasks = (source: Task[]) => {
     return source.filter((task) => {
+      if (taskScope === "one_time" && isRecurringScheduleTask(task)) return false;
+      if (taskScope === "recurring" && !isRecurringScheduleTask(task)) return false;
       if (isVerifiedFromPriorMonth(task)) return false;
       if (statusFilter !== "all" && task.status !== statusFilter) return false;
       if (workerFilter !== "all") {
@@ -1233,7 +1243,7 @@ export default function TaskManagementPage() {
       grouped[c] = filtered.filter((t) => t.status === c);
     });
     setColumnTasks(grouped);
-  }, [tasks, statusFilter, workerFilter, supervisorFilter]);
+  }, [tasks, statusFilter, workerFilter, supervisorFilter, taskScope]);
 
   const fetchData = async () => {
     try {
@@ -1556,7 +1566,31 @@ export default function TaskManagementPage() {
               </button>
             </div>
           </div>
-          <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <div className="flex bg-gray-200 dark:bg-neutral-700 rounded-lg p-1 shrink-0">
+              {(
+                [
+                  { id: "all" as const, label: "Бүгд" },
+                  { id: "one_time" as const, label: "Нэг удаагийн" },
+                  { id: "recurring" as const, label: "Давтамжит" },
+                ] as const
+              ).map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setTaskScope(id)}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    taskScope === id
+                      ? "bg-white dark:bg-neutral-600 text-gray-900 dark:text-gray-100 shadow"
+                      : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}

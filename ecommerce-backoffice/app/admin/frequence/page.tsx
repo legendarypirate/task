@@ -22,6 +22,12 @@ interface Task {
   supervisor_id?: number;
 }
 
+function isRecurringScheduleTask(task: Task): boolean {
+  const ft = task.frequency_type;
+  const fv = task.frequency_value;
+  return !!(ft && ft !== "none" && fv != null);
+}
+
 export default function TaskCalendarPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [calendarTasks, setCalendarTasks] = useState<Task[]>([]);
@@ -403,17 +409,17 @@ export default function TaskCalendarPage() {
         </CardContent>
       </Card>
 
-      {/* Бүх ажлын жагсаалт */}
+      {/* Нэг удаагийн ажлууд (давтамжитууд доорх картад) */}
       <Card>
         <CardHeader>
-          <CardTitle>Бүх ажлууд</CardTitle>
+          <CardTitle>Нэг удаагийн ажлууд</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="text-center py-4">Ачааллаж байна...</div>
           ) : (
             <div className="space-y-4">
-              {tasks.map((task) => (
+              {tasks.filter((task) => !isRecurringScheduleTask(task)).map((task) => (
                 <div key={task.id} className="border rounded-lg p-4">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
@@ -482,9 +488,9 @@ export default function TaskCalendarPage() {
                 </div>
               ))}
               
-              {tasks.length === 0 && (
+              {tasks.filter((task) => !isRecurringScheduleTask(task)).length === 0 && (
                 <div className="text-center py-8 text-gray-500">
-                  Ажил байхгүй байна
+                  Нэг удаагийн ажил байхгүй байна
                 </div>
               )}
             </div>
@@ -500,7 +506,7 @@ export default function TaskCalendarPage() {
         <CardContent>
           <div className="space-y-4">
             {tasks
-              .filter(task => task.frequency_type !== 'none')
+              .filter((task) => isRecurringScheduleTask(task))
               .map((task) => (
                 <div key={task.id} className="border rounded-lg p-4">
                   <div className="flex justify-between items-start">
@@ -549,7 +555,7 @@ export default function TaskCalendarPage() {
                 </div>
               ))}
             
-            {tasks.filter(task => task.frequency_type !== 'none').length === 0 && (
+            {tasks.filter((task) => isRecurringScheduleTask(task)).length === 0 && (
               <div className="text-center py-8 text-gray-500">
                 Давтамжтай ажил байхгүй байна
               </div>

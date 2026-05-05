@@ -36,6 +36,12 @@ interface Task {
   frequency_value?: number | null;
 }
 
+function isRecurringScheduleTask(task: Task): boolean {
+  const ft = task.frequency_type;
+  const fv = task.frequency_value;
+  return !!(ft && ft !== "none" && fv != null);
+}
+
 // User interface for supervisors
 interface User {
   id: number;
@@ -364,11 +370,13 @@ function CreateTaskDrawer({
 }
 
 export default function KanbanPage() {
+  const [allTasks, setAllTasks] = useState<Task[]>([]);
   const [columnTasks, setColumnTasks] = useState<Record<string, Task[]>>({});
   const [supervisors, setSupervisors] = useState<User[]>([]);
   const [loadingSupervisors, setLoadingSupervisors] = useState(true);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
+  const [taskScope, setTaskScope] = useState<"all" | "one_time" | "recurring">("all");
   
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -383,6 +391,19 @@ export default function KanbanPage() {
     fetchSupervisors();
     fetchTasks();
   }, []);
+
+  useEffect(() => {
+    const tasks = allTasks.filter((t) => {
+      if (taskScope === "one_time") return !isRecurringScheduleTask(t);
+      if (taskScope === "recurring") return isRecurringScheduleTask(t);
+      return true;
+    });
+    const grouped: Record<string, Task[]> = {};
+    columns.forEach((c) => {
+      grouped[c] = tasks.filter((tt) => tt.status === c);
+    });
+    setColumnTasks(grouped);
+  }, [allTasks, taskScope]);
 
   const fetchSupervisors = async () => {
     try {
@@ -443,15 +464,10 @@ export default function KanbanPage() {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/task`);
       const json = await res.json();
       const tasks = Array.isArray(json.data) ? json.data : [];
-
-      const grouped: Record<string, Task[]> = {};
-      columns.forEach((c) => {
-        grouped[c] = tasks.filter((t: Task) => t.status === c);
-      });
-
-      setColumnTasks(grouped);
+      setAllTasks(tasks);
     } catch (err) {
       console.error("Failed to fetch tasks", err);
+      setAllTasks([]);
     }
   };
 
@@ -572,17 +588,41 @@ export default function KanbanPage() {
   return (
     <div className="p-6 bg-gray-100 dark:bg-neutral-900 min-h-screen">
       {/* Header with buttons */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100">
           Task Board
         </h1>
-        <button
-          onClick={() => setIsCreateDrawerOpen(true)}
-          className="bg-green-600 hover:bg-green-700 text-white py-2 px-6 rounded-lg transition-colors duration-200 flex items-center gap-2"
-        >
-          <span>+</span>
-          Шинэ Task Үүсгэх
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex bg-gray-200 dark:bg-neutral-700 rounded-lg p-1">
+            {(
+              [
+                { id: "all" as const, label: "Бүгд" },
+                { id: "one_time" as const, label: "Нэг удаагийн" },
+                { id: "recurring" as const, label: "Давтамжит" },
+              ] as const
+            ).map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTaskScope(id)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  taskScope === id
+                    ? "bg-white dark:bg-neutral-600 text-gray-900 dark:text-gray-100 shadow"
+                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => setIsCreateDrawerOpen(true)}
+            className="bg-green-600 hover:bg-green-700 text-white py-2 px-6 rounded-lg transition-colors duration-200 flex items-center gap-2"
+          >
+            <span>+</span>
+            Шинэ Task Үүсгэх
+          </button>
+        </div>
       </div>
 
       <DndContext 
