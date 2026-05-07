@@ -419,6 +419,198 @@ exports.updateEventDates = async (req, res) => {
   }
 };
 
+// ---------------------- MONTHLY REPORT (backoffice) ----------------------
+
+const MONTHLY_REPORT_ENGINEER_ROLES = ["supervisor", "director", "general_manager"];
+const MONTHLY_REPORT_WORKER_ROLES = ["worker"];
+
+const ROLE_LABEL_MN = {
+  supervisor: "Инженер",
+  worker: "Завсарчин",
+  director: "Удирдагч",
+  general_manager: "Ерөнхий менежер",
+};
+
+const TASK_STATUS_LABEL_MN = {
+  pending: "Хүлээгдэж байна",
+  in_progress: "Гүйцэтгэж байна",
+  done: "Хянагдаж байна",
+  verified: "Батлагдсан",
+  cancelled: "Буцаагдсан",
+};
+
+const AVATAR_BG_COLORS = [
+  "#4CAF50",
+  "#795548",
+  "#F44336",
+  "#2196F3",
+  "#9C27B0",
+  "#FF9800",
+  "#00BCD4",
+  "#E91E63",
+];
+
+function assigneeIdsFromTask(task) {
+  const raw = task.assigned_to;
+  if (raw === undefined || raw === null) return [];
+  if (Array.isArray(raw)) {
+    return raw.map((v) => Number(v)).filter((n) => Number.isFinite(n));
+  }
+  const n = Number(raw);
+  return Number.isFinite(n) ? [n] : [];
+}
+
+function taskInReportingMonth(task, monthStart, monthEnd) {
+  const created = task.createdAt ? new Date(task.createdAt) : null;
+  const updated = task.updatedAt ? new Date(task.updatedAt) : null;
+  const due = task.due_date ? new Date(task.due_date) : null;
+
+  const inRange = (d) =>
+    d &&
+    !Number.isNaN(d.getTime()) &&
+    d >= monthStart &&
+    d <= monthEnd;
+
+  if (inRange(due)) return true;
+  if (inRange(created)) return true;
+  if (inRange(updated)) return true;
+  return false;
+}
+
+function initialsFromFullName(fullName) {
+  if (!fullName || typeof fullName !== "string") return "?";
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const a = parts[0][0] || "";
+    const b = parts[parts.length - 1][0] || "";
+    return (a + b).toUpperCase();
+  }
+  return fullName.trim().slice(0, 2).toUpperCase();
+}
+
+function avatarColorForUserId(userId) {
+  const idx = Math.abs(Number(userId)) % AVATAR_BG_COLORS.length;
+  return AVATAR_BG_COLORS[idx];
+}
+
+function formatYmd(d) {
+  if (!d) return null;
+  const x = new Date(d);
+  if (Number.isNaN(x.getTime())) return null;
+  const y = x.getFullYear();
+  const m = String(x.getMonth() + 1).padStart(2, "0");
+  const day = String(x.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+exports.getMonthlyReport = async (req, res) => {
+  try {
+    const year = parseInt(req.params.year, 10);
+    const month = parseInt(req.params.month, 10);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+      return res.status(400).json({ success: false, message: "Буруу он, сар" });
+    }
+
+    const monthStart = new Date(year, month - 1, 1, 0, 0, 0, 0);
+    const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
+
+    const [allTasks, engineers, workers] = await Promise.all([
+      Task.findAll({ order: [["id", "ASC"]] }),
+      User.findAll({
+        where: { role: { [Op.in]: MONTHLY_REPORT_ENGINEER_ROLES } },
+        order: [["full_name", "ASC"]],
+      }),
+      User.findAll({
+        where: { role: { [Op.in]: MONTHLY_REPORT_WORKER_ROLES } },
+        order: [["full_name", "ASC"]],
+      }),
+    ]);
+
+    const tasksInMonth = allTasks.filter((t) => taskInReportingMonth(t, monthStart, monthEnd));
+
+    function buildUserReport(user) {
+      const mine = tasksInMonth.filter((t) => assigneeIdsFromTask(t).includes(user.id));
+
+      const status_counts = {
+        approved: 0,
+        review: 0,
+        returned: 0,
+        waiting: 0,
+        in_progress: 0,
+      };
+
+      for (const t of mine) {
+        const s = t.status;
+        if (s === "verified") status_counts.approved += 1;
+        else if (s === "done") status_counts.review += 1;
+        else if (s === "cancelled") status_counts.returned += 1;
+        else if (s === "pending") status_counts.waiting += 1;
+        else if (s === "in_progress") status_counts.in_progress += 1;
+      }
+
+      const total = mine.length;
+      const completion_percentage =
+        total === 0 ? 0 : Math.round((status_counts.approved / total) * 100);
+
+      const tasks = mine.map((t, idx) => {
+        const json = t.toJSON ? t.toJSON() : t;
+        return {
+          index: idx + 1,
+          id: json.id,
+          title: json.title,
+          description: json.description || "",
+          start_date: formatYmd(json.createdAt),
+          end_date: formatYmd(json.due_date),
+          image_url: json.image || null,
+          status: json.status,
+          status_label: TASK_STATUS_LABEL_MN[json.status] || json.status,
+        };
+      });
+
+      return {
+        id: user.id,
+        name: user.full_name,
+        role: user.role,
+        role_label: ROLE_LABEL_MN[user.role] || user.role,
+        avatar_initials: initialsFromFullName(user.full_name),
+        avatar_color: avatarColorForUserId(user.id),
+        completion_percentage,
+        status_counts,
+        tasks,
+      };
+    }
+
+    const monthLabel = new Date(year, month - 1, 1).toLocaleString("en-US", {
+      month: "long",
+      year: "numeric",
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        year,
+        month,
+        month_label: monthLabel,
+        sections: [
+          {
+            id: "engineers",
+            title: "ИНЖЕНЕРҮҮДИЙН АЖЛЫН ТАЙЛАН",
+            users: engineers.map((u) => buildUserReport(u)),
+          },
+          {
+            id: "employees",
+            title: "АЖИЛТНУУДЫН АЖЛЫН ТАЙЛАН",
+            users: workers.map((u) => buildUserReport(u)),
+          },
+        ],
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // ---------------------- STATS ----------------------
 exports.getStats = async (req, res) => {
   try {

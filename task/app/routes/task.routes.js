@@ -29,6 +29,9 @@ module.exports = (app) => {
   // Get stats
   router.get("/stats", task.getStats);
 
+  // Monthly work report (must be before /:id)
+  router.get("/monthly-report/:year/:month", task.getMonthlyReport);
+
   // Create task
   router.post("/", task.create);
 

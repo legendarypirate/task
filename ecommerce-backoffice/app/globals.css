@@ -121,3 +121,27 @@
   }
 }
 
+/* Monthly report: print / Save as PDF (hides chrome outside #monthly-report-print-root) */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #monthly-report-print-root,
+  #monthly-report-print-root * {
+    visibility: visible;
+  }
+  #monthly-report-print-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    background: white;
+    color: black;
+  }
+  #monthly-report-print-root .no-print,
+  #monthly-report-print-root .no-print * {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}
+

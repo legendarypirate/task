@@ -3,17 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Users, Settings, Clock,Calendar,} from "lucide-react";
+import { Home, Users, Settings, Clock, FileBarChart } from "lucide-react";
 
 const links = [
   { href: "/admin", label: "Хянах самбар", icon: Home },
   { href: "/admin/users", label: "Хэрэглэгч", icon: Users },
-  // { href: "/admin/tasks", label: "Үүрэг даалгаврууд", icon: Calendar },
   { href: "/admin/frequence", label: "Давтамжит ажлууд", icon: Settings },
-    { href: "/admin/tasklist", label: "Жагсаалтаар", icon: Settings },
-
+  { href: "/admin/tasklist", label: "Жагсаалтаар", icon: Settings },
+  { href: "/admin/report", label: "Тайлан", icon: FileBarChart },
   { href: "/admin/notification", label: "Мэдэгдэлүүд", icon: Clock },
-
 ];
 
 export function Sidebar() {
