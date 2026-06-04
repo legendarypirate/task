@@ -4,7 +4,33 @@ const User = db.users;
 const Op = db.Sequelize.Op;
 const path = require('path');
 const fs = require('fs');
+const jwt = require("jsonwebtoken");
 const cloudinary = require("../config/cloudinary");
+const {
+  collectRecipientIds,
+  idsAdded,
+  notifyTaskAssignmentAsync,
+} = require("../services/taskNotification.service");
+
+const JWT_SECRET = process.env.JWT_SECRET || "your-fallback-secret-key";
+
+/** Resolve assigner from auth middleware or Bearer token (task routes are often unguarded). */
+function getActorFromRequest(req, bodyUserId) {
+  if (req.user?.userId) {
+    return { userId: req.user.userId, name: req.user.fullName || null };
+  }
+  const token = req.headers?.authorization?.split(" ")[1];
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, JWT_SECRET);
+      return { userId: decoded.userId, name: decoded.fullName || null };
+    } catch (_) {
+      /* ignore invalid token */
+    }
+  }
+  const uid = toNullableInt(bodyUserId);
+  return { userId: uid, name: null };
+}
 
 function toNullableInt(value) {
   if (value === undefined || value === null || value === "") return null;
@@ -61,10 +87,11 @@ exports.create = async (req, res) => {
     const normalizedFrequencyValue =
       normalizedFrequencyType === "none" ? null : toNullableInt(frequency_value);
 
+    const creatorId = created_by || req.user?.userId || 1;
     const task = await Task.create({
       title,
       description,
-      created_by: created_by || req.user?.userId || 1, // req.user байхгүй бол default утга
+      created_by: creatorId,
       assigned_to: normalizedAssignedTo,
       supervisor_id: normalizedSupervisorId,
       priority: priority || "normal",
@@ -74,6 +101,19 @@ exports.create = async (req, res) => {
       frequency_type: normalizedFrequencyType,
       frequency_value: normalizedFrequencyValue
     });
+
+    const recipientIds = collectRecipientIds(task);
+    if (recipientIds.length) {
+      const actor = getActorFromRequest(req, creatorId);
+      notifyTaskAssignmentAsync({
+        task,
+        recipientIds,
+        actorUserId: actor.userId,
+        actorName: actor.name,
+        title: "Шинэ даалгавар",
+        receiverType: "task_assigned",
+      });
+    }
 
     return res.send({ success: true, data: task });
   } catch (err) {
@@ -143,9 +183,49 @@ exports.update = async (req, res) => {
       payload.deadline_reminder_sent_for = null;
     }
 
+    const assignmentTouched =
+      assignKeys.some((k) => Object.prototype.hasOwnProperty.call(req.body, k)) ||
+      supervisorKeys.some((k) => Object.prototype.hasOwnProperty.call(req.body, k));
+
+    const before = assignmentTouched ? await Task.findByPk(id) : null;
+    if (assignmentTouched && !before) {
+      return res.status(404).send({ success: false, message: "Таск олдсонгүй" });
+    }
+
     const result = await Task.update(payload, { where: { id } });
     if (result[0] === 0) {
       return res.status(404).send({ success: false, message: "Таск олдсонгүй" });
+    }
+
+    if (assignmentTouched && before) {
+      const after = await Task.findByPk(id);
+      const actor = getActorFromRequest(req, req.body.created_by);
+      const newAssignees = idsAdded(before.assigned_to, after?.assigned_to);
+      const newSupervisors = idsAdded(before.supervisor_id, after?.supervisor_id);
+
+      if (after && newAssignees.length) {
+        notifyTaskAssignmentAsync({
+          task: after,
+          recipientIds: newAssignees,
+          actorUserId: actor.userId,
+          actorName: actor.name,
+          title: "Даалгавар хуваарилагдлаа",
+          receiverType: "task_assigned",
+        });
+      }
+      if (after && newSupervisors.length) {
+        notifyTaskAssignmentAsync({
+          task: after,
+          recipientIds: newSupervisors,
+          actorUserId: actor.userId,
+          actorName: actor.name,
+          title: "Хянагч томилогдлоо",
+          message: actor.name
+            ? `${actor.name} танд «${(after.title || "").trim()}» даалгаврыг хянах үүрэг өгсөн`
+            : `«${(after.title || "").trim()}» даалгаврыг хянах үүрэг танд өгөгдлөө`,
+          receiverType: "task_supervisor",
+        });
+      }
     }
 
     return res.send({ success: true, message: "Амжилттай шинэчлэгдлээ" });
@@ -203,52 +283,46 @@ exports.findAllPublished = async (req, res) => {
 exports.assignSupervisor = async (req, res) => {
   try {
     const taskId = req.params.id;
-    const { supervisor_id } = req.body;
+    const supervisorIds = mergeBodyIntArrays(req.body, [
+      "supervisor_id",
+      "supervisor_ids",
+    ]);
 
-    // Validate input
-    if (!supervisor_id) {
+    if (!supervisorIds?.length) {
       return res.status(400).json({
         success: false,
         message: "Supervisor ID is required"
       });
     }
 
-    // First, verify that the supervisor exists and has the right role
-    const db = require("../models");
-    const User = db.users;
-
-    const supervisor = await User.findByPk(supervisor_id);
-
-    if (!supervisor) {
-      return res.status(404).json({
-        success: false,
-        message: "Supervisor not found"
-      });
-    }
-
-    // Check if user has supervisor role
-    if (supervisor.role !== 'supervisor' && supervisor.role !== 'Supervisor') {
-      return res.status(400).json({
-        success: false,
-        message: "User is not a supervisor"
-      });
-    }
-
-    // Update the task with supervisor_id
-    const [updated] = await db.tasks.update(
-      { supervisor_id },
-      { where: { id: taskId } }
-    );
-
-    if (updated === 0) {
+    const before = await Task.findByPk(taskId);
+    if (!before) {
       return res.status(404).json({
         success: false,
         message: "Task not found"
       });
     }
 
-    // Fetch the updated task to return
-    const updatedTask = await db.tasks.findByPk(taskId, {
+    for (const sid of supervisorIds) {
+      const supervisor = await User.findByPk(sid);
+      if (!supervisor) {
+        return res.status(404).json({
+          success: false,
+          message: `Supervisor not found (id ${sid})`
+        });
+      }
+      const role = String(supervisor.role || "").toLowerCase();
+      if (role !== "supervisor") {
+        return res.status(400).json({
+          success: false,
+          message: "User is not a supervisor"
+        });
+      }
+    }
+
+    await Task.update({ supervisor_id: supervisorIds }, { where: { id: taskId } });
+
+    const updatedTask = await Task.findByPk(taskId, {
       include: [
         {
           model: User,
@@ -256,6 +330,21 @@ exports.assignSupervisor = async (req, res) => {
           attributes: ['id', 'full_name', 'phone', 'role']
         }
       ]
+    });
+
+    const newSupervisors = idsAdded(before.supervisor_id, supervisorIds);
+    const notifyIds = newSupervisors.length ? newSupervisors : supervisorIds;
+    const actor = getActorFromRequest(req);
+    notifyTaskAssignmentAsync({
+      task: updatedTask,
+      recipientIds: notifyIds,
+      actorUserId: actor.userId,
+      actorName: actor.name,
+      title: "Хянагч томилогдлоо",
+      message: actor.name
+        ? `${actor.name} танд «${(updatedTask?.title || "").trim()}» даалгаврыг хянах үүрэг өгсөн`
+        : undefined,
+      receiverType: "task_supervisor",
     });
 
     res.json({
@@ -829,43 +918,51 @@ exports.getCalendarTasks = async (req, res) => {
 exports.assignToWorker = async (req, res) => {
   try {
     const taskId = req.params.id;
-    const { assigned_to } = req.body;
+    const assigneeIds = mergeBodyIntArrays(req.body, [
+      "assigned_to",
+      "assigned_to_ids",
+      "assignee_ids",
+    ]);
 
-    // Validate input
-    if (!assigned_to) {
+    if (!assigneeIds?.length) {
       return res.status(400).json({
         success: false,
         message: "Ажилтны ID шаардлагатай"
       });
     }
 
-    // Check if task exists
-    const task = await db.tasks.findByPk(taskId);
-    if (!task) {
+    const before = await Task.findByPk(taskId);
+    if (!before) {
       return res.status(404).json({
         success: false,
         message: "Даалгавар олдсонгүй"
       });
     }
 
-    // Check if worker exists (optional but recommended)
-    const worker = await db.users.findByPk(assigned_to);
-    if (!worker) {
-      return res.status(404).json({
-        success: false,
-        message: "Ажилтан олдсонгүй"
-      });
+    for (const wid of assigneeIds) {
+      const worker = await User.findByPk(wid);
+      if (!worker) {
+        return res.status(404).json({
+          success: false,
+          message: `Ажилтан олдсонгүй (id ${wid})`
+        });
+      }
     }
 
-    // Update the task
-    const updatedTask = await db.tasks.update(
-      { assigned_to: assigned_to },
-      {
-        where: { id: taskId },
-        returning: true // For PostgreSQL, for MySQL you might need to fetch separately
-      }
-    );
+    await Task.update({ assigned_to: assigneeIds }, { where: { id: taskId } });
 
+    const updatedTask = await Task.findByPk(taskId);
+    const newAssignees = idsAdded(before.assigned_to, assigneeIds);
+    const notifyIds = newAssignees.length ? newAssignees : assigneeIds;
+    const actor = getActorFromRequest(req);
+    notifyTaskAssignmentAsync({
+      task: updatedTask,
+      recipientIds: notifyIds,
+      actorUserId: actor.userId,
+      actorName: actor.name,
+      title: "Даалгавар хуваарилагдлаа",
+      receiverType: "task_assigned",
+    });
 
     return res.status(200).json({
       success: true,
