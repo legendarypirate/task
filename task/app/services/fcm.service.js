@@ -46,7 +46,10 @@ async function sendToTokens(tokens, { title, body, data = {} }) {
   const unique = [...new Set(tokens.filter(Boolean))];
   if (!unique.length) return { successCount: 0, failureCount: 0 };
 
-  const dataStrings = {};
+  const dataStrings = {
+    title: title == null ? "" : String(title),
+    body: body == null ? "" : String(body),
+  };
   Object.entries(data).forEach(([k, v]) => {
     dataStrings[k] = v == null ? "" : String(v);
   });
