@@ -67,6 +67,15 @@ async function sendToTokens(tokens, { title, body, data = {} }) {
           sound: "default",
         },
       },
+      apns: {
+        headers: { "apns-priority": "10" },
+        payload: {
+          aps: {
+            alert: { title, body },
+            sound: "default",
+          },
+        },
+      },
       tokens: chunk,
     };
     const res = await admin.messaging().sendEachForMulticast(message);
