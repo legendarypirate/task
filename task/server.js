@@ -87,16 +87,41 @@ app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}.`);
 });
 
-// Daily at 08:00 server local time: push reminder 1 day before task due_date
+// Scheduled jobs (node-cron)
 try {
   const cron = require("node-cron");
   const { runTaskDeadlineReminders } = require("./app/jobs/taskDeadlineReminder.job");
-  cron.schedule("0 8 * * *", () => {
-    runTaskDeadlineReminders().catch((e) =>
-      console.error("[deadline-reminder] job error:", e)
-    );
-  });
-  console.log("[cron] Task deadline reminders scheduled: 0 8 * * * (server local time)");
+  const {
+    runSupervisorAllocationDailyReport,
+  } = require("./app/jobs/supervisorAllocationCheck.job");
+
+  cron.schedule(
+    "0 8 * * *",
+    () => {
+      runTaskDeadlineReminders().catch((e) =>
+        console.error("[deadline-reminder] job error:", e)
+      );
+    },
+    { timezone: process.env.CRON_TZ || "Asia/Ulaanbaatar" }
+  );
+  console.log(
+    "[cron] Task deadline reminders: 08:00 " +
+      (process.env.CRON_TZ || "Asia/Ulaanbaatar")
+  );
+
+  cron.schedule(
+    "0 12 * * *",
+    () => {
+      runSupervisorAllocationDailyReport().catch((e) =>
+        console.error("[supervisor-allocation] job error:", e)
+      );
+    },
+    { timezone: process.env.CRON_TZ || "Asia/Ulaanbaatar" }
+  );
+  console.log(
+    "[cron] Supervisor allocation report: 12:00 " +
+      (process.env.CRON_TZ || "Asia/Ulaanbaatar")
+  );
 } catch (e) {
-  console.warn("[cron] Could not schedule deadline reminders:", e.message);
+  console.warn("[cron] Could not schedule jobs:", e.message);
 }

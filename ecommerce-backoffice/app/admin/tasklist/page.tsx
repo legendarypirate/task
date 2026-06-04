@@ -39,27 +39,37 @@ interface Task extends CardTask {
   completed_at?: string;
 }
 
-/** Date used to decide which calendar month a verified task belongs to (verification / last update). */
-function getVerifiedMonthReference(task: Task): Date | null {
+const FINISHED_STATUSES = new Set(["done", "verified", "cancelled"]);
+
+/** When a finished task was last touched (completion or status change). */
+function getFinishedMonthReference(task: Task): Date | null {
   const raw =
+    task.completed_at ??
     task.updated_at ??
     task.updatedAt ??
-    task.completed_at;
+    task.created_at;
   if (!raw) return null;
   const d = new Date(raw);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-/** True when task is verified and its reference month is strictly before the current local month. */
-function isVerifiedFromPriorMonth(task: Task): boolean {
-  if (task.status !== "verified") return false;
-  const d = getVerifiedMonthReference(task);
-  if (!d) return false;
+function isBeforeCurrentCalendarMonth(d: Date): boolean {
   const now = new Date();
   return (
     d.getFullYear() < now.getFullYear() ||
     (d.getFullYear() === now.getFullYear() && d.getMonth() < now.getMonth())
   );
+}
+
+/**
+ * Hide finished work from earlier months on the active board.
+ * Open tasks (pending / in_progress) stay visible even if due date is in the past.
+ */
+function isFinishedFromPriorMonth(task: Task): boolean {
+  if (!FINISHED_STATUSES.has(task.status)) return false;
+  const d = getFinishedMonthReference(task);
+  if (!d) return false;
+  return isBeforeCurrentCalendarMonth(d);
 }
 
 /** API uses integer[] for supervisor_id; match a single supervisor id for filtering. */
@@ -1215,7 +1225,7 @@ export default function TaskManagementPage() {
     return source.filter((task) => {
       if (taskScope === "one_time" && isRecurringScheduleTask(task)) return false;
       if (taskScope === "recurring" && !isRecurringScheduleTask(task)) return false;
-      if (isVerifiedFromPriorMonth(task)) return false;
+      if (isFinishedFromPriorMonth(task)) return false;
       if (statusFilter !== "all" && task.status !== statusFilter) return false;
       if (workerFilter !== "all") {
         const wid = Number(workerFilter);

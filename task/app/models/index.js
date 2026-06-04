@@ -29,6 +29,12 @@ db.users = require("./user.model.js")(sequelize, Sequelize);
 db.tasks = require("./task.model.js")(sequelize, Sequelize);
 db.broadcasts = require("./broadcast.model.js")(sequelize, Sequelize);
 db.user_notifications = require("./user_notification.model.js")(sequelize, Sequelize);
+db.task_allocation_logs = require("./task_allocation_log.model.js")(sequelize, Sequelize);
+
+db.users.hasMany(db.task_allocation_logs, { foreignKey: "allocator_id", as: "allocations" });
+db.task_allocation_logs.belongsTo(db.users, { foreignKey: "allocator_id", as: "allocator" });
+db.tasks.hasMany(db.task_allocation_logs, { foreignKey: "task_id", as: "allocationLogs" });
+db.task_allocation_logs.belongsTo(db.tasks, { foreignKey: "task_id", as: "task" });
 
 // Register e-commerce models
 

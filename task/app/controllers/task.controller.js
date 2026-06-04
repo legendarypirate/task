@@ -11,6 +11,7 @@ const {
   idsAdded,
   notifyTaskAssignmentAsync,
 } = require("../services/taskNotification.service");
+const { recordSupervisorAllocationAsync } = require("../services/allocationLog.service");
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-fallback-secret-key";
 
@@ -102,9 +103,17 @@ exports.create = async (req, res) => {
       frequency_value: normalizedFrequencyValue
     });
 
+    const actor = getActorFromRequest(req, creatorId);
+    if (normalizedAssignedTo?.length) {
+      recordSupervisorAllocationAsync({
+        actorUserId: actor.userId,
+        taskId: task.id,
+        action: "create",
+      });
+    }
+
     const recipientIds = collectRecipientIds(task);
     if (recipientIds.length) {
-      const actor = getActorFromRequest(req, creatorId);
       notifyTaskAssignmentAsync({
         task,
         recipientIds,
@@ -204,6 +213,11 @@ exports.update = async (req, res) => {
       const newSupervisors = idsAdded(before.supervisor_id, after?.supervisor_id);
 
       if (after && newAssignees.length) {
+        recordSupervisorAllocationAsync({
+          actorUserId: actor.userId,
+          taskId: after.id,
+          action: "update",
+        });
         notifyTaskAssignmentAsync({
           task: after,
           recipientIds: newAssignees,
@@ -955,6 +969,11 @@ exports.assignToWorker = async (req, res) => {
     const newAssignees = idsAdded(before.assigned_to, assigneeIds);
     const notifyIds = newAssignees.length ? newAssignees : assigneeIds;
     const actor = getActorFromRequest(req);
+    recordSupervisorAllocationAsync({
+      actorUserId: actor.userId,
+      taskId: Number(taskId),
+      action: "assign",
+    });
     notifyTaskAssignmentAsync({
       task: updatedTask,
       recipientIds: notifyIds,
