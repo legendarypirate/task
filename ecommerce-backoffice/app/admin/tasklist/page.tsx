@@ -33,24 +33,57 @@ const STATUS_LABELS: Record<(typeof columns)[number], string> = {
 interface Task extends CardTask {
   image?: string | null;
   created_at?: string;
+  createdAt?: string;
   updated_at?: string;
   /** Sequelize may serialize as camelCase */
   updatedAt?: string;
   completed_at?: string;
+  completedAt?: string;
+  dueDate?: string;
 }
 
 const FINISHED_STATUSES = new Set(["done", "verified", "cancelled"]);
 
-/** When a finished task was last touched (completion or status change). */
-function getFinishedMonthReference(task: Task): Date | null {
-  const raw =
-    task.completed_at ??
-    task.updated_at ??
-    task.updatedAt ??
-    task.created_at;
-  if (!raw) return null;
-  const d = new Date(raw);
+function parseTaskDate(raw: unknown): Date | null {
+  if (raw === undefined || raw === null || raw === "") return null;
+  const d = new Date(String(raw));
   return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function taskField(task: Task, ...keys: string[]): unknown {
+  const row = task as Task & Record<string, unknown>;
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
+      return row[key];
+    }
+  }
+  return null;
+}
+
+/**
+ * Month a finished task belongs to — do not use updatedAt for done/verified
+ * (a later edit would keep old May work visible in June).
+ */
+function getFinishedMonthReference(task: Task): Date | null {
+  const completed = parseTaskDate(
+    taskField(task, "completed_at", "completedAt")
+  );
+  if (completed) return completed;
+
+  if (task.status === "done" || task.status === "verified") {
+    const due = parseTaskDate(taskField(task, "due_date", "dueDate"));
+    if (due) return due;
+    return parseTaskDate(taskField(task, "created_at", "createdAt"));
+  }
+
+  if (task.status === "cancelled") {
+    return (
+      parseTaskDate(taskField(task, "updated_at", "updatedAt")) ??
+      parseTaskDate(taskField(task, "created_at", "createdAt"))
+    );
+  }
+
+  return parseTaskDate(taskField(task, "created_at", "createdAt"));
 }
 
 function isBeforeCurrentCalendarMonth(d: Date): boolean {
@@ -65,10 +98,10 @@ function isBeforeCurrentCalendarMonth(d: Date): boolean {
  * Hide finished work from earlier months on the active board.
  * Open tasks (pending / in_progress) stay visible even if due date is in the past.
  */
-function isFinishedFromPriorMonth(task: Task): boolean {
+function shouldHideFinishedTask(task: Task): boolean {
   if (!FINISHED_STATUSES.has(task.status)) return false;
   const d = getFinishedMonthReference(task);
-  if (!d) return false;
+  if (!d) return true;
   return isBeforeCurrentCalendarMonth(d);
 }
 
@@ -1225,7 +1258,7 @@ export default function TaskManagementPage() {
     return source.filter((task) => {
       if (taskScope === "one_time" && isRecurringScheduleTask(task)) return false;
       if (taskScope === "recurring" && !isRecurringScheduleTask(task)) return false;
-      if (isFinishedFromPriorMonth(task)) return false;
+      if (shouldHideFinishedTask(task)) return false;
       if (statusFilter !== "all" && task.status !== statusFilter) return false;
       if (workerFilter !== "all") {
         const wid = Number(workerFilter);
