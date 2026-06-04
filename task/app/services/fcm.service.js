@@ -60,11 +60,32 @@ async function sendToTokens(tokens, { title, body, data = {} }) {
     const message = {
       notification: { title, body },
       data: dataStrings,
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "high_importance_channel",
+          sound: "default",
+        },
+      },
       tokens: chunk,
     };
     const res = await admin.messaging().sendEachForMulticast(message);
     successCount += res.successCount;
     failureCount += res.failureCount;
+
+    if (res.failureCount > 0) {
+      res.responses.forEach((item, index) => {
+        if (!item.success) {
+          console.error(
+            "[FCM] token send failed:",
+            item.error?.code,
+            item.error?.message,
+            "tokenPrefix:",
+            chunk[index]?.slice(0, 12)
+          );
+        }
+      });
+    }
   }
 
   return { successCount, failureCount };
