@@ -341,6 +341,10 @@ exports.updateStatus = async (req, res) => {
 
     const updateData = { status };
 
+    if (status === "done") {
+      updateData.completed_at = new Date();
+    }
+
     // ✅ Only require image when status changes to "done"
     if (status === "done" && !req.file) {
       await t.rollback();
@@ -381,8 +385,8 @@ exports.updateStatus = async (req, res) => {
       updateData.image = result.secure_url;
     }
 
-    // Update task
     await task.update(updateData, { transaction: t });
+    await task.reload({ transaction: t });
 
     await t.commit();
 

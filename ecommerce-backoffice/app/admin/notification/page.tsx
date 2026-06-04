@@ -1,21 +1,22 @@
-// app/notifications/page.tsx
+// app/admin/notification/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { 
-  Send, 
-  Bell, 
-  Users, 
-  Clock, 
-  CheckCircle, 
+import {
+  Send,
+  Bell,
+  Users,
+  Clock,
+  CheckCircle,
   AlertCircle,
   Calendar,
   User,
   X,
+  RefreshCw,
 } from "lucide-react";
 import { format } from "date-fns";
 import { mn } from "date-fns/locale";
@@ -32,6 +33,24 @@ type UiNotification = {
   sentAt: string;
   read: boolean;
   status: string;
+  targetUsers?: number;
+  successCount?: number;
+};
+
+type ApiBroadcast = {
+  id: number;
+  title: string;
+  message: string;
+  type?: string;
+  priority?: string;
+  sender_name?: string;
+  roles?: string[];
+  receiver_type?: string;
+  target_users?: number;
+  success_count?: number;
+  failure_count?: number;
+  status?: string;
+  created_at?: string;
 };
 
 const SYSTEM_ROLES: { value: string; label: string }[] = [
@@ -41,9 +60,10 @@ const SYSTEM_ROLES: { value: string; label: string }[] = [
   { value: "worker", label: "Ажилтан" },
 ];
 
-const initialNotifications: UiNotification[] = [];
+const ROLE_LABELS: Record<string, string> = Object.fromEntries(
+  SYSTEM_ROLES.map((r) => [r.value, r.label])
+);
 
-// Мэдэгдлийн төрлүүд
 const notificationTypes = [
   { value: "announcement", label: "Ерөнхий мэдэгдэл" },
   { value: "task", label: "Даалгавар" },
@@ -53,17 +73,40 @@ const notificationTypes = [
   { value: "training", label: "Сургалт" },
 ];
 
-// Хүрээтэй тэргүүн зэргийн жагсаалт
 const priorities = [
   { value: "low", label: "Бага", color: "bg-gray-100 text-gray-800" },
   { value: "medium", label: "Дунд", color: "bg-yellow-100 text-yellow-800" },
   { value: "high", label: "Өндөр", color: "bg-red-100 text-red-800" },
 ];
 
+function rolesToLabel(roles: string[]) {
+  if (!roles.length) return "—";
+  return roles.map((r) => ROLE_LABELS[r] || r).join(", ");
+}
+
+function mapBroadcastToUi(b: ApiBroadcast): UiNotification {
+  return {
+    id: b.id,
+    title: b.title,
+    message: b.message,
+    type: b.type || "announcement",
+    priority: b.priority || "medium",
+    sender: b.sender_name || "Админ",
+    receiverType: b.receiver_type || "role_broadcast",
+    receiverName: rolesToLabel(b.roles || []),
+    sentAt: b.created_at || new Date().toISOString(),
+    read: true,
+    status: b.status || "sent",
+    targetUsers: b.target_users,
+    successCount: b.success_count,
+  };
+}
+
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<UiNotification[]>(initialNotifications);
+  const [notifications, setNotifications] = useState<UiNotification[]>([]);
   const [showSendForm, setShowSendForm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const [fcmReady, setFcmReady] = useState<boolean | null>(null);
 
   const [newNotification, setNewNotification] = useState({
@@ -71,7 +114,6 @@ export default function NotificationsPage() {
     message: "",
     type: "announcement",
     priority: "medium",
-    /** role value -> selected */
     roles: {
       director: true,
       general_manager: true,
@@ -80,32 +122,6 @@ export default function NotificationsPage() {
     } as Record<string, boolean>,
   });
 
-  useEffect(() => {
-    const api = process.env.NEXT_PUBLIC_API_URL;
-    if (!api) return;
-    fetch(`${api}/api/push/status`)
-      .then((r) => r.json())
-      .then((j) => setFcmReady(!!j.fcmConfigured))
-      .catch(() => setFcmReady(false));
-  }, []);
-
-  // Унших болгох
-  const markAsRead = (id: number) => {
-    setNotifications(prev =>
-      prev.map(notif =>
-        notif.id === id ? { ...notif, read: true } : notif
-      )
-    );
-  };
-
-  // Бүгдийг уншсан болгох
-  const markAllAsRead = () => {
-    setNotifications(prev =>
-      prev.map(notif => ({ ...notif, read: true }))
-    );
-    toast.success("Бүх мэдэгдлийг уншсан болголоо");
-  };
-
   const defaultRolesState = () =>
     ({
       director: true,
@@ -113,6 +129,55 @@ export default function NotificationsPage() {
       supervisor: true,
       worker: true,
     }) as Record<string, boolean>;
+
+  const loadBroadcasts = useCallback(async () => {
+    const api = process.env.NEXT_PUBLIC_API_URL;
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!api || !token) {
+      setLoadingHistory(false);
+      return;
+    }
+
+    setLoadingHistory(true);
+    try {
+      const res = await fetch(`${api}/api/notifications/broadcasts`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.message || "Түүх ачааллахад алдаа гарлаа");
+        return;
+      }
+      const rows = Array.isArray(json.data) ? json.data : [];
+      setNotifications(rows.map(mapBroadcastToUi));
+    } catch (error) {
+      console.error("loadBroadcasts:", error);
+      toast.error("Түүх ачааллахад алдаа гарлаа");
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const api = process.env.NEXT_PUBLIC_API_URL;
+    if (!api) return;
+    fetch(`${api}/api/push/status`)
+      .then((r) => r.json())
+      .then((j) => setFcmReady(!!j.fcmConfigured))
+      .catch(() => setFcmReady(false));
+    loadBroadcasts();
+  }, [loadBroadcasts]);
+
+  const markAsRead = (id: number) => {
+    setNotifications((prev) =>
+      prev.map((notif) => (notif.id === id ? { ...notif, read: true } : notif))
+    );
+  };
+
+  const markAllAsRead = () => {
+    setNotifications((prev) => prev.map((notif) => ({ ...notif, read: true })));
+    toast.success("Бүх мэдэгдлийг уншсан болголоо");
+  };
 
   const handleSendNotification = async () => {
     if (!newNotification.title.trim() || !newNotification.message.trim()) {
@@ -152,6 +217,9 @@ export default function NotificationsPage() {
         body: JSON.stringify({
           title: newNotification.title.trim(),
           body: newNotification.message.trim(),
+          message: newNotification.message.trim(),
+          type: newNotification.type,
+          priority: newNotification.priority,
           roles: selectedRoles,
         }),
       });
@@ -163,25 +231,11 @@ export default function NotificationsPage() {
         return;
       }
 
-      const receiverName = SYSTEM_ROLES.filter((r) => selectedRoles.includes(r.value))
-        .map((r) => r.label)
-        .join(", ");
-
-      const newNotif: UiNotification = {
-        id: Date.now(),
-        title: newNotification.title.trim(),
-        message: newNotification.message.trim(),
-        type: newNotification.type,
-        priority: newNotification.priority,
-        sender: "Админ (push)",
-        receiverType: "role_broadcast",
-        receiverName,
-        sentAt: new Date().toISOString(),
-        read: false,
-        status: "sent",
-      };
-
-      setNotifications((prev) => [newNotif, ...prev]);
+      if (data.data) {
+        setNotifications((prev) => [mapBroadcastToUi(data.data), ...prev]);
+      } else {
+        await loadBroadcasts();
+      }
 
       setNewNotification({
         title: "",
@@ -194,7 +248,7 @@ export default function NotificationsPage() {
       setShowSendForm(false);
 
       toast.success(
-        `Push илгээгдлээ. Идэвхтэй хэрэглэгч: ${data.targetUsers ?? 0}, амжилттай: ${data.successCount ?? 0}`
+        `Мэдэгдэл хадгалагдлаа. Зорилтот хэрэглэгч: ${data.targetUsers ?? 0}, push амжилттай: ${data.successCount ?? 0}`
       );
     } catch (error) {
       console.error("Мэдэгдэл илгээхэд алдаа гарлаа:", error);
@@ -204,7 +258,6 @@ export default function NotificationsPage() {
     }
   };
 
-  // Мэдэгдлийн төрлийн icon
   const getTypeIcon = (type: string) => {
     switch (type) {
       case "task":
@@ -220,18 +273,16 @@ export default function NotificationsPage() {
     }
   };
 
-  // Өнгөний классууд
   const getPriorityColor = (priority: string) => {
-    const priorityObj = priorities.find(p => p.value === priority);
+    const priorityObj = priorities.find((p) => p.value === priority);
     return priorityObj?.color || "bg-gray-100 text-gray-800";
   };
 
   const getReceiverTypeLabel = (type: string) => {
-    if (type === "role_broadcast") return "Үүргээр (push)";
+    if (type === "role_broadcast") return "Үүргээр (push + апп)";
     return type;
   };
 
-  // Огноо форматлах
   const formatDate = (dateString: string) => {
     try {
       return format(new Date(dateString), "yyyy-MM-dd HH:mm", { locale: mn });
@@ -240,8 +291,7 @@ export default function NotificationsPage() {
     }
   };
 
-  // Уншаагүй мэдэгдлийн тоо
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
     <div className="container mx-auto p-4 md:p-6">
@@ -250,22 +300,28 @@ export default function NotificationsPage() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Мэдэгдэл удирдах</h1>
             <p className="text-gray-600 mt-2">
-              Өгөөж чихэр боов ХХК-ийн ажилчдад мэдэгдэл илгээх, удирдах
+              Ажилчдад push болон апп доторх мэдэгдэл илгээх, түүх харах
             </p>
           </div>
-          
+
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={loadBroadcasts}
+              disabled={loadingHistory}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={`h-4 w-4 ${loadingHistory ? "animate-spin" : ""}`} />
+              Шинэчлэх
+            </Button>
+
             {unreadCount > 0 && (
-              <Button
-                variant="outline"
-                onClick={markAllAsRead}
-                className="flex items-center gap-2"
-              >
+              <Button variant="outline" onClick={markAllAsRead} className="flex items-center gap-2">
                 <CheckCircle className="h-4 w-4" />
                 Бүгдийг уншсан болгох ({unreadCount})
               </Button>
             )}
-            
+
             <Button
               onClick={() => setShowSendForm(true)}
               className="bg-blue-600 hover:bg-blue-700 flex items-center gap-2"
@@ -276,70 +332,66 @@ export default function NotificationsPage() {
           </div>
         </div>
 
-        {/* Статистик картууд */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500">
-                Нийт мэдэгдэл
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-500">Нийт мэдэгдэл</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{notifications.length}</div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500">
-                Уншаагүй
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">{unreadCount}</div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500">
-                Өндөр анхааралтай
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-500">Өндөр анхааралтай</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {notifications.filter(n => n.priority === "high").length}
+                {notifications.filter((n) => n.priority === "high").length}
               </div>
             </CardContent>
           </Card>
-          
+
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500">
-                Өнөөдрийн мэдэгдэл
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-gray-500">Өнөөдрийн мэдэгдэл</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {notifications.filter(n => 
-                  new Date(n.sentAt).toDateString() === new Date().toDateString()
-                ).length}
+                {
+                  notifications.filter(
+                    (n) => new Date(n.sentAt).toDateString() === new Date().toDateString()
+                  ).length
+                }
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-500">Push бэлэн эсэх</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div
+                className={`text-2xl font-bold ${
+                  fcmReady ? "text-green-600" : fcmReady === false ? "text-red-600" : "text-gray-400"
+                }`}
+              >
+                {fcmReady === null ? "…" : fcmReady ? "Тийм" : "Үгүй"}
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Шинэ мэдэгдэл илгээх drawer */}
       {showSendForm && (
         <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white shadow-xl border-l z-50 animate-in slide-in-from-right duration-300">
           <div className="flex items-center justify-between p-6 border-b">
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Шинэ мэдэгдэл илгээх
-              </h2>
+              <h2 className="text-xl font-semibold text-gray-900">Шинэ мэдэгдэл илгээх</h2>
               <p className="text-sm text-gray-500 mt-1">
-                Сонгосон үүргийн хэрэглэгчдэд push (FCM) илгээнэ
+                Сонгосон үүргийн хэрэглэгчдэд апп + push (FCM) илгээнэ
               </p>
             </div>
             <Button
@@ -351,12 +403,13 @@ export default function NotificationsPage() {
               <X className="h-5 w-5" />
             </Button>
           </div>
-          
+
           <div className="p-6 overflow-y-auto h-[calc(100vh-80px)]">
             <div className="space-y-4">
               {fcmReady === false && (
                 <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                  Сервер дээр Firebase тохируулаагүй байна (.env дээр FIREBASE_SERVICE_ACCOUNT_JSON).
+                  Push илгээх боломжгүй — сервер дээр Firebase тохируулаагүй (.env:
+                  FIREBASE_SERVICE_ACCOUNT_JSON). Апп доторх мэдэгдэл хадгалагдана.
                 </div>
               )}
               {fcmReady === true && (
@@ -364,32 +417,27 @@ export default function NotificationsPage() {
                   Push илгээх бэлэн.
                 </div>
               )}
+
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Гарчиг *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Гарчиг *</label>
                 <input
                   type="text"
                   value={newNotification.title}
-                  onChange={(e) => setNewNotification(prev => ({
-                    ...prev,
-                    title: e.target.value
-                  }))}
+                  onChange={(e) =>
+                    setNewNotification((prev) => ({ ...prev, title: e.target.value }))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Мэдэгдлийн гарчиг"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Мессеж *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Мессеж *</label>
                 <textarea
                   value={newNotification.message}
-                  onChange={(e) => setNewNotification(prev => ({
-                    ...prev,
-                    message: e.target.value
-                  }))}
+                  onChange={(e) =>
+                    setNewNotification((prev) => ({ ...prev, message: e.target.value }))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Мэдэгдлийн дэлгэрэнгүй мэдээлэл"
                   rows={4}
@@ -402,13 +450,12 @@ export default function NotificationsPage() {
                 </label>
                 <select
                   value={newNotification.type}
-                  onChange={(e) => setNewNotification(prev => ({
-                    ...prev,
-                    type: e.target.value
-                  }))}
+                  onChange={(e) =>
+                    setNewNotification((prev) => ({ ...prev, type: e.target.value }))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {notificationTypes.map(type => (
+                  {notificationTypes.map((type) => (
                     <option key={type.value} value={type.value}>
                       {type.label}
                     </option>
@@ -417,18 +464,15 @@ export default function NotificationsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Анхаарал
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Анхаарал</label>
                 <select
                   value={newNotification.priority}
-                  onChange={(e) => setNewNotification(prev => ({
-                    ...prev,
-                    priority: e.target.value
-                  }))}
+                  onChange={(e) =>
+                    setNewNotification((prev) => ({ ...prev, priority: e.target.value }))
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {priorities.map(priority => (
+                  {priorities.map((priority) => (
                     <option key={priority.value} value={priority.value}>
                       {priority.label}
                     </option>
@@ -455,7 +499,8 @@ export default function NotificationsPage() {
                   </button>
                 </div>
                 <p className="text-xs text-gray-500 mb-2">
-                  Зөвхөн гар утсанд апп нээгээд нэвтэрсэн, FCM токен илгээсэн хэрэглэгчдэд хүрнэ.
+                  Бүх сонгосон үүргийн идэвхтэй хэрэглэгчид апп дотор харагдана. Push нь FCM
+                  токентой хэрэглэгчид л очно.
                 </p>
                 <div className="space-y-2 border rounded-md p-3 bg-gray-50">
                   {SYSTEM_ROLES.map((role) => (
@@ -502,88 +547,92 @@ export default function NotificationsPage() {
         </div>
       )}
 
-      {/* Мэдэгдлийн жагсаалт */}
       <Card>
         <CardHeader>
           <CardTitle>Мэдэгдлийн түүх</CardTitle>
-          <CardDescription>
-            Өгөөж чихэр боов ХХК-ийн илгээсэн мэдэгдлийн бүртгэл
-          </CardDescription>
+          <CardDescription>Сerver дээр хадгалагдсан илгээсэн мэдэгдлүүд</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {notifications.length === 0 && (
-              <p className="text-sm text-gray-500 py-6 text-center">
-                Одоогоор түүх байхгүй. Push илгээсний дараа энд түр зуурын бүртгэл харагдана.
-              </p>
-            )}
-            {notifications.map((notification) => (
-              <div
-                key={notification.id}
-                className={`p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer ${
-                  !notification.read ? "bg-blue-50 border-blue-200" : ""
-                }`}
-                onClick={() => markAsRead(notification.id)}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3 flex-1">
-                    <div className="mt-1">
-                      {getTypeIcon(notification.type)}
-                    </div>
-                    
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-gray-900">
-                          {notification.title}
-                        </h3>
-                        <Badge className={getPriorityColor(notification.priority)}>
-                          {notification.priority === "high" ? "Өндөр" : 
-                           notification.priority === "medium" ? "Дунд" : "Бага"}
-                        </Badge>
-                        {!notification.read && (
-                          <Badge className="bg-blue-100 text-blue-800">
-                            Шинэ
+          {loadingHistory ? (
+            <p className="text-sm text-gray-500 py-6 text-center">Ачааллаж байна...</p>
+          ) : notifications.length === 0 ? (
+            <p className="text-sm text-gray-500 py-6 text-center">
+              Одоогоор түүх байхгүй. Эхний мэдэгдлээ илгээж үзнэ үү.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {notifications.map((notification) => (
+                <div
+                  key={notification.id}
+                  className={`p-4 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer ${
+                    !notification.read ? "bg-blue-50 border-blue-200" : ""
+                  }`}
+                  onClick={() => markAsRead(notification.id)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className="mt-1">{getTypeIcon(notification.type)}</div>
+
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <h3 className="font-semibold text-gray-900">{notification.title}</h3>
+                          <Badge className={getPriorityColor(notification.priority)}>
+                            {notification.priority === "high"
+                              ? "Өндөр"
+                              : notification.priority === "medium"
+                                ? "Дунд"
+                                : "Бага"}
                           </Badge>
-                        )}
-                      </div>
-                      
-                      <p className="text-gray-600 mb-2">
-                        {notification.message}
-                      </p>
-                      
-                      <div className="flex flex-wrap gap-4 text-sm text-gray-500">
-                        <div className="flex items-center gap-1">
-                          <User className="h-3 w-3" />
-                          <span>Илгээгч: {notification.sender}</span>
+                          {!notification.read && (
+                            <Badge className="bg-blue-100 text-blue-800">Шинэ</Badge>
+                          )}
                         </div>
-                        
-                        <div className="flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          <span>Хүлээн авагч: {notification.receiverName}</span>
-                        </div>
-                        
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          <span>{formatDate(notification.sentAt)}</span>
-                        </div>
-                        
-                        <div className="flex items-center gap-1">
-                          <Bell className="h-3 w-3" />
-                          <span>{getReceiverTypeLabel(notification.receiverType)}</span>
+
+                        <p className="text-gray-600 mb-2">{notification.message}</p>
+
+                        <div className="flex flex-wrap gap-4 text-sm text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            <span>Илгээгч: {notification.sender}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <Users className="h-3 w-3" />
+                            <span>Хүлээн авагч: {notification.receiverName}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>{formatDate(notification.sentAt)}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <Bell className="h-3 w-3" />
+                            <span>{getReceiverTypeLabel(notification.receiverType)}</span>
+                          </div>
+
+                          {notification.targetUsers != null && (
+                            <div className="flex items-center gap-1">
+                              <span>
+                                Хэрэглэгч: {notification.targetUsers}, push:{" "}
+                                {notification.successCount ?? 0}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
-                  </div>
-                  
-                  <div className="ml-4">
-                    <Badge variant="outline">
-                      {notificationTypes.find(t => t.value === notification.type)?.label}
-                    </Badge>
+
+                    <div className="ml-4">
+                      <Badge variant="outline">
+                        {notificationTypes.find((t) => t.value === notification.type)?.label}
+                      </Badge>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -27,6 +27,8 @@ db.product_variations = require("./product_variation.model.js")(sequelize, Seque
 // Register existing models
 db.users = require("./user.model.js")(sequelize, Sequelize);
 db.tasks = require("./task.model.js")(sequelize, Sequelize);
+db.broadcasts = require("./broadcast.model.js")(sequelize, Sequelize);
+db.user_notifications = require("./user_notification.model.js")(sequelize, Sequelize);
 
 // Register e-commerce models
 
@@ -41,6 +43,14 @@ db.tasks.belongsTo(db.users, { foreignKey: "created_by", as: "creator" });
 // NOTE: assigned_to and supervisor_id are now integer[] arrays, so we cannot use
 // standard Sequelize belongsTo/hasMany associations for them.
 // Supervisor data must be resolved manually in controllers.
+
+db.users.hasMany(db.broadcasts, { foreignKey: "sender_id", as: "sentBroadcasts" });
+db.broadcasts.belongsTo(db.users, { foreignKey: "sender_id", as: "sender" });
+
+db.users.hasMany(db.user_notifications, { foreignKey: "user_id", as: "notifications" });
+db.user_notifications.belongsTo(db.users, { foreignKey: "user_id", as: "user" });
+db.broadcasts.hasMany(db.user_notifications, { foreignKey: "broadcast_id", as: "recipients" });
+db.user_notifications.belongsTo(db.broadcasts, { foreignKey: "broadcast_id", as: "broadcast" });
 
 // ====== E-COMMERCE RELATIONSHIPS ======
 // Product - ProductVariation relationships

@@ -1,193 +1,181 @@
 const db = require("../models");
-const Notification = db.notifications;
-const Op = db.Sequelize.Op;
+const { Op } = db.Sequelize;
+const UserNotification = db.user_notifications;
+const Broadcast = db.broadcasts;
+const User = db.users;
+const {
+  serializeNotification,
+  serializeBroadcast,
+} = require("../services/notification.service");
 
-// Create and Save a new Categories
-exports.create = (req, res) => {
-  // Validate request
-  if (!req.body.title) {
-    res.status(400).send({
-      message: "Content can not be empty!"
-    });
-    return;
-  }
+const ALL_ROLES = ["director", "general_manager", "supervisor", "worker"];
 
-  // Create a Categories
-  const newNot = {
-    title: req.body.title,
-    description:req.body.description,
-    user_id: 1
-  };
+function assertAdminRole(role) {
+  const r = (role || "").toLowerCase();
+  return r === "director" || r === "general_manager";
+}
 
-  // Save Categories in the database
-  Notification.create(newNot)
-  .then(data => {
-    res.json({ success: true, data: data });
-  })
-  .catch(err => {
-    res.status(500).json({ success: false, message: err.message || "Some error occurred while creating the Banner." });
-  });
-};
-
-// Retrieve all Categories from the database.
-exports.findAll = async (req, res) => {
-  const question = req.query.question;
-  var condition = question ? { question: { [Op.like]: `%${question}%` } } : null;
-
+exports.getMyNotifications = async (req, res) => {
   try {
-      console.log("ss");    
-    const data = await Notification.findAll({ where: condition });
-    console.log(data);
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Нэвтрэх шаардлагатай" });
+    }
 
-    res.send({
+    const rows = await UserNotification.findAll({
+      where: { user_id: userId },
+      order: [["createdAt", "DESC"]],
+      limit: 200,
+    });
+
+    return res.json({
       success: true,
-      data: data
+      data: rows.map(serializeNotification),
     });
   } catch (err) {
-    res.status(500).send({
-      success: false,
-      message: err.message || "Some error occurred while retrieving Categories."
-    });
+    console.error("getMyNotifications:", err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
-exports.mobile_cat = async (req, res) => {
-  const name = req.query.name;
-  var condition = name 
-    ? { 
-        name: { [Op.like]: `%${name}%` },
-        is_shown: '1' 
-      } 
-    : { is_shown: '1' };
-
+exports.getUnreadCount = async (req, res) => {
   try {
-    console.log("ss");
-    const data = await category.findAll({ where: condition });
-    console.log(data);
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Нэвтрэх шаардлагатай" });
+    }
 
-    res.send({
+    const count = await UserNotification.count({
+      where: { user_id: userId, read: false },
+    });
+
+    return res.json({ success: true, count });
+  } catch (err) {
+    console.error("getUnreadCount:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+exports.markAsRead = async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    const id = req.params.id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Нэвтрэх шаардлагатай" });
+    }
+
+    const row = await UserNotification.findOne({
+      where: { id, user_id: userId },
+    });
+    if (!row) {
+      return res.status(404).json({ success: false, message: "Мэдэгдэл олдсонгүй" });
+    }
+
+    if (!row.read) {
+      await row.update({ read: true, read_at: new Date() });
+    }
+
+    return res.json({
       success: true,
-      data: data
+      message: "Уншсан болголоо",
+      data: serializeNotification(row),
     });
   } catch (err) {
-    res.status(500).send({
-      success: false,
-      message: err.message || "Some error occurred while retrieving Categories."
-    });
+    console.error("markAsRead:", err);
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 
+exports.markAllAsRead = async (req, res) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Нэвтрэх шаардлагатай" });
+    }
 
+    const [updated] = await UserNotification.update(
+      { read: true, read_at: new Date() },
+      { where: { user_id: userId, read: false } }
+    );
 
-// Find a single Categories with an id
-exports.findOne = (req, res) => {
-  const id = req.params.id;
-
-  category.findByPk(id)
-    .then(data => {
-      if (data) {
-        res.send(data);
-      } else {
-        res.status(404).send({
-          message: `Cannot find category with id=${id}.`
-        });
-      }
-    })
-    .catch(err => {
-      res.status(500).send({
-        message: "Error retrieving category with id=" + id
-      });
+    return res.json({
+      success: true,
+      message: "Бүх мэдэгдлийг уншсан болголоо",
+      updated,
     });
+  } catch (err) {
+    console.error("markAllAsRead:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
-// Update a Categories by the id in the request
-exports.update = (req, res) => {
-  const id = req.params.id;
-  console.log(req.body);
-  const updateData = {
-    name: req.body.name || null,
-    is_shown: req.body.is_shown !== undefined ? String(req.body.is_shown) : null // Ensure is_shown is a string ("0" or "1")
-  };
-
-  category.update(updateData, {
-    where: { id: id }
-  })
-    .then(num => {
-      if (num == 1) {
-        return category.findByPk(id); // Fetch the updated entry
-      } else {
-        throw new Error(`Cannot update category with id=${id}. Maybe category was not found or req.body is empty!`);
-      }
-    })
-    .then(updatedEntry => {
-      res.json({
-        success: true,
-        message: "Category was updated successfully.",
-        data: updatedEntry
-      });
-    })
-    .catch(err => {
-      res.status(500).json({
+exports.getBroadcastHistory = async (req, res) => {
+  try {
+    if (!assertAdminRole(req.user?.role)) {
+      return res.status(403).json({
         success: false,
-        message: "Error updating category with id=" + id,
-        error: err.message
+        message: "Зөвхөн захирал эсвэл ерөнхий менежер харах эрхтэй",
       });
+    }
+
+    const rows = await Broadcast.findAll({
+      order: [["createdAt", "DESC"]],
+      limit: 100,
+      include: [
+        {
+          model: User,
+          as: "sender",
+          attributes: ["id", "full_name", "role"],
+        },
+      ],
     });
+
+    return res.json({
+      success: true,
+      data: rows.map((row) => {
+        const item = serializeBroadcast(row);
+        if (row.sender) {
+          item.sender_name = row.sender.full_name || item.sender_name;
+        }
+        return item;
+      }),
+    });
+  } catch (err) {
+    console.error("getBroadcastHistory:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
-
-
-// Delete a category with the specified id in the request
-exports.delete = (req, res) => {
-  const id = req.params.id;
-
-  category.destroy({
-    where: { id: id }
-  })
-    .then(num => {
-      if (num == 1) {
-        res.json({ success: true, message: "Category was deleted successfully!" });
-
-      } else {
-        res.send({
-          message: `Cannot delete Categories with id=${id}. Maybe category was not found!`
-        });
-      }
-    })
-    .catch(err => {
-      res.status(500).send({
-        message: "Could not delete category with id=" + id
+exports.getBroadcastStats = async (req, res) => {
+  try {
+    if (!assertAdminRole(req.user?.role)) {
+      return res.status(403).json({
+        success: false,
+        message: "Зөвхөн захирал эсвэл ерөнхий менежер харах эрхтэй",
       });
+    }
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [total, highPriority, todayCount] = await Promise.all([
+      Broadcast.count(),
+      Broadcast.count({ where: { priority: "high" } }),
+      Broadcast.count({
+        where: {
+          createdAt: { [Op.gte]: startOfToday },
+        },
+      }),
+    ]);
+
+    return res.json({
+      success: true,
+      data: { total, highPriority, todayCount },
     });
+  } catch (err) {
+    console.error("getBroadcastStats:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
 };
 
-// Delete all Tutorials from the database.
-exports.deleteAll = (req, res) => {
-  category.destroy({
-    where: {},
-    truncate: false
-  })
-    .then(nums => {
-      res.send({ message: `${nums} category were deleted successfully!` });
-    })
-    .catch(err => {
-      res.status(500).send({
-        message:
-          err.message || "Some error occurred while removing all category."
-      });
-    });
-};
-
-// find all published Categories
-exports.findAllPublished = (req, res) => {
-  category.findAll({ where: { published: true } })
-    .then(data => {
-      res.send(data);
-    })
-    .catch(err => {
-      res.status(500).send({
-        message:
-          err.message || "Some error occurred while retrieving category."
-      });
-    });
-};
+module.exports.ALL_ROLES = ALL_ROLES;

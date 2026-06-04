@@ -60,6 +60,7 @@ app.get("/", (req, res) => {
 // Route imports
 require("./app/routes/auth.routes")(app);
 require("./app/routes/push.routes")(app);
+require("./app/routes/notification.routes")(app);
 require("./app/routes/task.routes")(app);
 
 // Role-related routes

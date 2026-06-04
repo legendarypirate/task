@@ -1,6 +1,10 @@
 const db = require("../models");
 const { Op } = db.Sequelize;
 const { sendToTokens, initFirebaseAdmin } = require("../services/fcm.service");
+const {
+  createBroadcastAndInbox,
+  serializeBroadcast,
+} = require("../services/notification.service");
 
 const User = db.users;
 
@@ -45,8 +49,10 @@ function assertAdminRole(role) {
 }
 
 exports.broadcastByRoles = async (req, res) => {
+  const t = await db.sequelize.transaction();
   try {
     if (!assertAdminRole(req.user?.role)) {
+      await t.rollback();
       return res.status(403).json({
         success: false,
         message: "Зөвхөн захирал эсвэл ерөнхий менежер илгээх эрхтэй",
@@ -55,9 +61,12 @@ exports.broadcastByRoles = async (req, res) => {
 
     const title = (req.body?.title || "").trim();
     const body = (req.body?.body || req.body?.message || "").trim();
+    const type = req.body?.type;
+    const priority = req.body?.priority;
     let roles = req.body?.roles;
 
     if (!title || !body) {
+      await t.rollback();
       return res.status(400).json({ success: false, message: "Гарчиг болон мессеж шаардлагатай" });
     }
 
@@ -70,41 +79,76 @@ exports.broadcastByRoles = async (req, res) => {
       .filter((r) => ALL_ROLES.includes(r));
 
     if (!normalized.length) {
+      await t.rollback();
       return res.status(400).json({ success: false, message: "Хүчинтэй үүрэг сонгоно уу" });
     }
 
-    if (!initFirebaseAdmin()) {
-      return res.status(503).json({
-        success: false,
-        message: "FCM тохируулаагүй байна (FIREBASE_SERVICE_ACCOUNT_JSON)",
-      });
+    const sender = await User.findByPk(req.user.userId, {
+      attributes: ["id", "full_name", "role"],
+      transaction: t,
+    });
+    if (!sender) {
+      await t.rollback();
+      return res.status(404).json({ success: false, message: "Илгээгч олдсонгүй" });
     }
 
     const users = await User.findAll({
       where: {
         role: normalized,
         is_active: true,
-        fcm_token: { [Op.ne]: null },
       },
-      attributes: ["id", "fcm_token"],
+      attributes: ["id", "fcm_token", "full_name", "role"],
+      transaction: t,
     });
 
     const tokens = users.map((u) => u.fcm_token).filter(Boolean);
-    const result = await sendToTokens(tokens, {
+
+    let successCount = 0;
+    let failureCount = 0;
+
+    if (initFirebaseAdmin() && tokens.length) {
+      const result = await sendToTokens(tokens, {
+        title,
+        body,
+        data: {
+          type: "admin_broadcast",
+          notificationType: String(type || "announcement"),
+          priority: String(priority || "medium"),
+        },
+      });
+      successCount = result.successCount;
+      failureCount = result.failureCount;
+    } else if (tokens.length && !initFirebaseAdmin()) {
+      failureCount = tokens.length;
+    }
+
+    const broadcast = await createBroadcastAndInbox({
+      senderId: sender.id,
+      senderName: sender.full_name,
       title,
-      body,
-      data: { type: "admin_broadcast" },
+      message: body,
+      type,
+      priority,
+      roles: normalized,
+      users,
+      successCount,
+      failureCount,
+      transaction: t,
     });
+
+    await t.commit();
 
     return res.json({
       success: true,
       message: "Илгээгдлээ",
       targetUsers: users.length,
-      successCount: result.successCount,
-      failureCount: result.failureCount,
+      successCount,
+      failureCount,
       roles: normalized,
+      data: serializeBroadcast(broadcast),
     });
   } catch (err) {
+    await t.rollback();
     console.error("broadcastByRoles:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
