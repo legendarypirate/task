@@ -60,32 +60,6 @@ function taskField(task: Task, ...keys: string[]): unknown {
   return null;
 }
 
-/**
- * Month a finished task belongs to — do not use updatedAt for done/verified
- * (a later edit would keep old May work visible in June).
- */
-function getFinishedMonthReference(task: Task): Date | null {
-  const completed = parseTaskDate(
-    taskField(task, "completed_at", "completedAt")
-  );
-  if (completed) return completed;
-
-  if (task.status === "done" || task.status === "verified") {
-    const due = parseTaskDate(taskField(task, "due_date", "dueDate"));
-    if (due) return due;
-    return parseTaskDate(taskField(task, "created_at", "createdAt"));
-  }
-
-  if (task.status === "cancelled") {
-    return (
-      parseTaskDate(taskField(task, "updated_at", "updatedAt")) ??
-      parseTaskDate(taskField(task, "created_at", "createdAt"))
-    );
-  }
-
-  return parseTaskDate(taskField(task, "created_at", "createdAt"));
-}
-
 function isBeforeCurrentCalendarMonth(d: Date): boolean {
   const now = new Date();
   return (
@@ -94,15 +68,40 @@ function isBeforeCurrentCalendarMonth(d: Date): boolean {
   );
 }
 
+function isDateInPriorMonth(raw: unknown): boolean {
+  const d = parseTaskDate(raw);
+  return d ? isBeforeCurrentCalendarMonth(d) : false;
+}
+
 /**
  * Hide finished work from earlier months on the active board.
+ * For done/verified: due_date month wins (May due → hidden in June even if marked done in June).
  * Open tasks (pending / in_progress) stay visible even if due date is in the past.
  */
 function shouldHideFinishedTask(task: Task): boolean {
   if (!FINISHED_STATUSES.has(task.status)) return false;
-  const d = getFinishedMonthReference(task);
-  if (!d) return true;
-  return isBeforeCurrentCalendarMonth(d);
+
+  if (task.status === "done" || task.status === "verified") {
+    const dueRaw = taskField(task, "due_date", "dueDate");
+    if (dueRaw != null && isDateInPriorMonth(dueRaw)) return true;
+
+    const completedRaw = taskField(task, "completed_at", "completedAt");
+    if (completedRaw != null && isDateInPriorMonth(completedRaw)) return true;
+
+    const createdRaw = taskField(task, "created_at", "createdAt");
+    if (dueRaw == null && completedRaw == null) {
+      if (createdRaw == null) return true;
+      return isDateInPriorMonth(createdRaw);
+    }
+
+    return false;
+  }
+
+  const cancelledRef =
+    taskField(task, "updated_at", "updatedAt") ??
+    taskField(task, "created_at", "createdAt");
+  if (cancelledRef == null) return true;
+  return isDateInPriorMonth(cancelledRef);
 }
 
 /** API uses integer[] for supervisor_id; match a single supervisor id for filtering. */
