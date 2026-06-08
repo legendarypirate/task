@@ -10,20 +10,16 @@ const {
 
 const ALL_ROLES = ["director", "general_manager", "supervisor", "worker"];
 
-function assertAdminRole(role) {
-  const r = (role || "").toLowerCase();
-  return r === "director" || r === "general_manager";
+function resolveUserId(req) {
+  return req.query.user_id || req.body?.user_id || null;
 }
 
 exports.getMyNotifications = async (req, res) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Нэвтрэх шаардлагатай" });
-    }
+    const userId = resolveUserId(req);
 
     const rows = await UserNotification.findAll({
-      where: { user_id: userId },
+      where: userId ? { user_id: userId } : undefined,
       order: [["createdAt", "DESC"]],
       limit: 200,
     });
@@ -40,13 +36,10 @@ exports.getMyNotifications = async (req, res) => {
 
 exports.getUnreadCount = async (req, res) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Нэвтрэх шаардлагатай" });
-    }
+    const userId = resolveUserId(req);
 
     const count = await UserNotification.count({
-      where: { user_id: userId, read: false },
+      where: userId ? { user_id: userId, read: false } : { read: false },
     });
 
     return res.json({ success: true, count });
@@ -58,15 +51,13 @@ exports.getUnreadCount = async (req, res) => {
 
 exports.markAsRead = async (req, res) => {
   try {
-    const userId = req.user?.userId;
+    const userId = resolveUserId(req);
     const id = req.params.id;
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Нэвтрэх шаардлагатай" });
-    }
 
-    const row = await UserNotification.findOne({
-      where: { id, user_id: userId },
-    });
+    const where = { id };
+    if (userId) where.user_id = userId;
+
+    const row = await UserNotification.findOne({ where });
     if (!row) {
       return res.status(404).json({ success: false, message: "Мэдэгдэл олдсонгүй" });
     }
@@ -88,14 +79,11 @@ exports.markAsRead = async (req, res) => {
 
 exports.markAllAsRead = async (req, res) => {
   try {
-    const userId = req.user?.userId;
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Нэвтрэх шаардлагатай" });
-    }
+    const userId = resolveUserId(req);
 
     const [updated] = await UserNotification.update(
       { read: true, read_at: new Date() },
-      { where: { user_id: userId, read: false } }
+      { where: userId ? { user_id: userId, read: false } : { read: false } }
     );
 
     return res.json({
@@ -111,13 +99,6 @@ exports.markAllAsRead = async (req, res) => {
 
 exports.getBroadcastHistory = async (req, res) => {
   try {
-    if (!assertAdminRole(req.user?.role)) {
-      return res.status(403).json({
-        success: false,
-        message: "Зөвхөн захирал эсвэл ерөнхий менежер харах эрхтэй",
-      });
-    }
-
     const rows = await Broadcast.findAll({
       order: [["createdAt", "DESC"]],
       limit: 100,
@@ -148,13 +129,6 @@ exports.getBroadcastHistory = async (req, res) => {
 
 exports.getBroadcastStats = async (req, res) => {
   try {
-    if (!assertAdminRole(req.user?.role)) {
-      return res.status(403).json({
-        success: false,
-        message: "Зөвхөн захирал эсвэл ерөнхий менежер харах эрхтэй",
-      });
-    }
-
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 

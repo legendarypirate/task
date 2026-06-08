@@ -132,17 +132,14 @@ export default function NotificationsPage() {
 
   const loadBroadcasts = useCallback(async () => {
     const api = process.env.NEXT_PUBLIC_API_URL;
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    if (!api || !token) {
+    if (!api) {
       setLoadingHistory(false);
       return;
     }
 
     setLoadingHistory(true);
     try {
-      const res = await fetch(`${api}/api/notifications/broadcasts`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${api}/api/notifications/broadcasts`);
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast.error(json.message || "Түүх ачааллахад алдаа гарлаа");
