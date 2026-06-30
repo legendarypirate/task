@@ -442,6 +442,23 @@ exports.updateStatus = async (req, res) => {
       });
     }
 
+    if (status === "cancelled") {
+      const actor = getActorFromRequest(req);
+      if (actor.userId) {
+        const actorUser = await User.findByPk(actor.userId, {
+          attributes: ["role"],
+          transaction: t,
+        });
+        if (actorUser && String(actorUser.role).toLowerCase() === "worker") {
+          await t.rollback();
+          return res.status(403).json({
+            success: false,
+            message: "Таны эрх хүрэхгүй байна",
+          });
+        }
+      }
+    }
+
     const updateData = { status };
 
     if (status === "done") {
